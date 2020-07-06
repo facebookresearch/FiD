@@ -11,7 +11,7 @@ The expected data format is a list of entry examples, where each entry example i
         - `title`: article title
         - `text`: passage text
 
-Example:
+Entry example:
 ```
 {
   'id': '0',

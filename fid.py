@@ -351,16 +351,6 @@ class T5Attention(nn.Module):
 
         scores += position_bias_mask
         weights = F.softmax(scores.float(), dim=-1).type_as(scores)  # (bs, n_heads, qlen, klen)
-        #q.requires_grad_(True)
-        #k.requires_grad_(True)
-        #position_bias.requires_grad_(True)
-
-        #print(q.requires_grad, k.requires_grad, position_bias.requires_grad)
-        
-        #print(self.q.requires_grad)
-
-        #weights = cp.checkpoint(self.custom(self.q), input, k, position_bias)
-
         weights = F.dropout(weights, p=self.dropout, training=self.training)  # (bs, n_heads, qlen, klen)
 
         # Mask heads if we want to
@@ -384,7 +374,6 @@ class T5Attention(nn.Module):
             x, k, position_bias_mask = inputs[0], inputs[1], inputs[2]
             qv = q(x)
             qv = qv.view(qv.size(0), -1, 12, 64).transpose(1, 2)
-            #print(q.requires_grad)
             scores = torch.einsum("bnqd,bnkd->bnqk", qv, k)  # (bs, n_heads, qlen, klen)
 
             scores += position_bias_mask
@@ -595,9 +584,8 @@ class T5Stack(T5PreTrainedModel):
 
         self.init_weights()
 
-        self.use_extra = False
-        self.switch_layer = -1
-        self.dummy_tensor = torch.ones(1, dtype=torch.float32, requires_grad=True)
+        self.checkpoint = False
+        self.dummy_tensor = torch.ones(1, dtype=torch.float32, requires_grad=True) #dummy tensor for checkpointing
 
     # def get_input_embeddings(self):
     #     return self.shared
@@ -624,12 +612,6 @@ class T5Stack(T5PreTrainedModel):
         if input_ids is not None and inputs_embeds is not None:
             raise ValueError("You cannot specify both input_ids and inputs_embeds at the same time")
         elif input_ids is not None:
-            if self.use_extra:
-                extra_tokens = self.extra_tokens[None].repeat(input_ids.size(0), 1).to(input_ids)
-                input_ids = torch.cat((extra_tokens, input_ids), dim=-1)
-                extra_mask = torch.ones(extra_tokens.size(), device=input_ids.device).bool()
-                if attention_mask is not None:
-                    attention_mask = torch.cat((extra_mask, attention_mask), dim=-1)
             input_shape = input_ids.size()
             input_ids = input_ids.view(-1, input_shape[-1])
         elif inputs_embeds is not None:
@@ -662,8 +644,6 @@ class T5Stack(T5PreTrainedModel):
                 causal_mask = seq_ids[None, None, :].repeat(batch_size, seq_length, 1) <= seq_ids[None, :, None]
                 causal_mask = causal_mask.to(attention_mask)
                 extended_attention_mask = causal_mask[:, None, :, :] * attention_mask[:, None, None, :]
-                if self.use_extra:
-                    extended_attention_mask[:, :, :, :self.extra_len] = 1
             else:
                 extended_attention_mask = attention_mask[:, None, None, :]
 
@@ -730,37 +710,29 @@ class T5Stack(T5PreTrainedModel):
             if self.output_hidden_states:
                 all_hidden_states = all_hidden_states + (hidden_states,)
 
-            #layer_outputs = layer_module(
-            #    hidden_states,
-            #    attention_mask = extended_attention_mask,
-            #    position_bias=position_bias,
-            #    encoder_hidden_states=encoder_hidden_states,
-            #    encoder_attention_mask=encoder_extended_attention_mask,
-            #    encoder_decoder_position_bias=encoder_decoder_position_bias,
-            #    head_mask=head_mask[i],
-            #)
-            
-            layer_outputs = torch.utils.checkpoint.checkpoint(
-                layer_module,
-                hidden_states,
-                extended_attention_mask,
-                position_bias,
-                encoder_hidden_states,
-                encoder_extended_attention_mask,
-                encoder_decoder_position_bias,
-                head_mask[i],
-                self.dummy_tensor,
-            )
-            #layer_outputs = layer_module(
-            #    hidden_states,
-            #    extended_attention_mask,
-            #    position_bias,
-            #    encoder_hidden_states,
-            #    encoder_extended_attention_mask,
-            #    encoder_decoder_position_bias,
-            #    head_mask[i],
-            #    self.dummy_tensor,
-            #)
+            if self.checkpoint:
+                layer_outputs = torch.utils.checkpoint.checkpoint(
+                    layer_module,
+                    hidden_states,
+                    extended_attention_mask,
+                    position_bias,
+                    encoder_hidden_states,
+                    encoder_extended_attention_mask,
+                    encoder_decoder_position_bias,
+                    head_mask[i],
+                    self.dummy_tensor,
+                )
+            else:
+                layer_outputs = layer_module(
+                    hidden_states,
+                    extended_attention_mask,
+                    position_bias,
+                    encoder_hidden_states,
+                    encoder_extended_attention_mask,
+                    encoder_decoder_position_bias,
+                    head_mask[i],
+                    self.dummy_tensor,
+                )
 
             # layer_outputs is a tuple with:
             # hidden-states, (self-attention weights), (self-attention position bias), (cross-attention weights), (cross-attention position bias)
@@ -964,8 +936,6 @@ class T5MergeForConditionalGeneration(T5PreTrainedModel):
 
         self.lm_head = nn.Linear(config.d_model, config.vocab_size, bias=False)
 
-        #self.cache = Cache(config)
-
         self.init_weights()
 
     def get_input_embeddings(self):
@@ -1047,9 +1017,6 @@ class T5MergeForConditionalGeneration(T5PreTrainedModel):
 
         # Decode
 
-        #with torch.no_grad():
-        #    decoder_input_ids[:, 0] = 32000 
-
         decoder_outputs = self.decoder(
             input_ids=decoder_input_ids,
             attention_mask=decoder_attention_mask,
@@ -1067,9 +1034,6 @@ class T5MergeForConditionalGeneration(T5PreTrainedModel):
         # See https://github.com/tensorflow/mesh/blob/fa19d69eafc9a482aff0b59ddd96b025c0cb207d/mesh_tensorflow/transformer/transformer.py#L586
         sequence_output = sequence_output * (self.model_dim ** -0.5)
         lm_logits = self.lm_head(sequence_output)
-
-        #p=self.cache(self.lm_head, context_ids, sequence_output=sequence_output, sequence_hidden=hidden_states, context=hidden_states, 
-        #            mask=attention_mask, alpha=self.alpha, theta=self.theta) 
 
         #decoder_outputs = (p,) + decoder_outputs[1:]
         decoder_outputs = (lm_logits,) + decoder_outputs[1:]  # Add hidden states and attention if they are here
@@ -1103,57 +1067,38 @@ class T5MergeForConditionalGeneration(T5PreTrainedModel):
         # past does not have to be re-ordered for T5.
         return past
     
-    def set_extra_tokens(self, extra_tokens):
-        start = 32001
-        if extra_tokens > 0:
-            #self.decoder.extra_tokens = torch.tensor([i for i in range(start, start+extra_tokens)])
-            self.decoder.extra_tokens = torch.tensor([0 for i in range(start, start+extra_tokens)])
-            self.decoder.use_extra = True
-
-        self.decoder.extra_len = extra_tokens
-        self.extra_len = extra_tokens
-    
-    def set_switch(self, switch_layer):
-        self.encoder.switch_layer = switch_layer
-
-    def apply_encoder_list(self, ids, mask):
+    def apply_encoder_list(self, input_ids, input_masks):
         shapes = []
-        for c in ids:
-            shapes.append(c.size(0))
-        #if np.sum(shapes)>0:
-        context_ids = torch.cat(ids, dim=0)
-        context_mask = torch.cat(mask, dim=0)
-        #self.encoder.output_hidden_states = True
-        context_outputs = self.encoder(context_ids, attention_mask=context_mask)[0]
-        d = torch.split(context_outputs, shapes, dim=0) 
-        contexts = []
-        context_ids = []
-        for i in range(len(ids)):
-            c = d[i]
-            m = mask[i]
-            c = c.reshape(-1, self.model_dim)
+        for p_ids in input_ids:
+            shapes.append(p_ids.size(0))
+        all_ids = torch.cat(input_ids, dim=0)
+        all_masks = torch.cat(input_masks, dim=0)
+        outputs = self.encoder(all_ids, attention_mask=all_masks)[0]
+        split_outputs = torch.split(outputs, shapes, dim=0) 
+        concat_outputs = []
+        concat_ids = []
+        for i in range(len(input_ids)):
+            p = split_outputs[i]
+            m = input_masks[i]
+            p = p.reshape(-1, self.model_dim)
             m = m.view(-1)
-            c = c[m]
-            x = ids[i].view(-1)[m][None]
-            context_ids.append(x)
-            contexts.append(c)
-            #context_outputs = torch.split(context_outputs, shapes, dim=0) 
+            p = p[m]
+            ids = input_ids[i].view(-1)[m]
+            concat_ids.append(ids[None])
+            concat_outputs.append(p[None])
 
-        co = [c.view(1, -1, self.model_dim) for c in contexts] 
-        sizes = [c.size(1) for c in co]
-        max_context = np.max(sizes)
-        co = [torch.cat((c, torch.zeros((1, max_context-c.size(1), self.model_dim)).cuda()), dim=1) for c in co]  
-        cm = [torch.cat(
+        sizes = [o.size(1) for o in concat_outputs]
+        max_length = np.max(sizes)
+        concat_outputs = [torch.cat((o, torch.zeros((1, max_length-o.size(1), self.model_dim)).cuda()), dim=1) for o in concat_outputs]  
+        concat_masks = [torch.cat(
                 (torch.ones((1, sizes[i]), dtype=torch.bool).cuda(),  
-                torch.zeros((1, max_context-sizes[i]), dtype=torch.bool).cuda()), dim=1) for i in range(len(co))]
-        cids = [torch.cat((c,torch.zeros((1, max_context-c.size(1))).long().cuda()), dim=1) for c in context_ids] 
+                torch.zeros((1, max_length-sizes[i]), dtype=torch.bool).cuda()), dim=1) for i in range(len(concat_outputs))]
+        concat_ids = [torch.cat((ids, torch.zeros((1, max_length-ids.size(1))).long().cuda()), dim=1) for ids in concat_ids] 
 
-        cm = torch.cat(cm, dim=0)
-        co = torch.cat(co, dim=0)
-        context_ids = torch.cat(cids, dim=0)
-        return co, cm.bool(), context_ids
-
-        #return d, context_ids
+        concat_masks = torch.cat(concat_masks, dim=0)
+        concat_outputs = torch.cat(concat_outputs, dim=0)
+        concat_ids = torch.cat(concat_ids, dim=0)
+        return concat_outputs, concat_masks.bool(), concat_ids
 
     @torch.no_grad()
     def generate(
@@ -1514,56 +1459,3 @@ class T5MergeForConditionalGeneration(T5PreTrainedModel):
             decoded[hypo_idx, : sent_lengths[hypo_idx]] = hypo[: sent_lengths[hypo_idx]]
 
         return decoded
-
-
-class Cache(nn.Module):
-    def __init__(self, config):
-        super().__init__()
-        self.model_dim = config.d_model
-        self.vocab_size = config.vocab_size
-        self.Wq = nn.Linear(self.model_dim, self.model_dim, bias=False)
-        self.Wk = nn.Linear(self.model_dim, self.model_dim, bias=False)
-        #self.Wk.weight.data.normal_(mean=0.0, std= ((config.d_model) ** -0.5))
-        #self.Wq.weight.data.normal_(mean=0.0, std= ((config.d_model) ** -0.5))
-        #self.dropout = nn.Dropout(0.1)
-        self.n_head = 1
-        self.topk = -1
-
-    def forward(self, lm_head, input_ids, sequence_output, sequence_hidden, context, mask, alpha, theta):
-        bsz, qlen = sequence_output.size(0), sequence_output.size(1)
-        scaled_output = sequence_output * (self.model_dim ** -0.5)
-        lm_logits = lm_head(scaled_output)
-        p_model = torch.softmax(lm_logits, dim=-1)
-        if alpha == 0.:
-            p = p_model 
-            p = torch.clamp(p, min=1e-8, max=2.0) 
-            p = torch.log(p)
-            return p
-        #p_cache = torch.zeros(lm_logits.size(), device=lm_logits.device)
-        #context = self.dropout(context)
-        #sequence_hidden = self.dropout(sequence_hidden)
-        q = theta * self.Wq(sequence_output).view(bsz, qlen, self.n_head, -1)
-        p_model = (1-alpha) * p_model 
-        klen = context.size(1)
-        k = self.Wk(context)
-        k = k.view(bsz, klen, self.n_head, -1)
-        attn_score = torch.einsum('bihd, bjhd->bhij', q, k)
-        #print(tokenizer.decode(input_ids[0]))
-        context_score = attn_score.masked_fill(~mask[:,None, None].bool(), -10000.)
-        context_prob = torch.softmax(context_score, dim=-1)
-        context_prob = context_prob.mean(dim=1)
-        context_prob = alpha * context_prob
-        bsz, qlen, clen = context_prob.size()
-        context_prob = context_prob.view(bsz*qlen, -1) 
-        context_value = input_ids[:, None].repeat(1, qlen, 1).view(bsz*qlen, -1)
-        incr =(torch.arange(0, qlen*bsz, device=context_prob.device)*self.vocab_size)[:, None] 
-        context_value = context_value + incr
-        print(context_value)
-        p_model = p_model.view(-1)
-        context_value = context_value.view(-1)
-        context_prob = context_prob.view(-1)
-        p = p_model.index_add(dim=-1, index=context_value, source=context_prob)
-        p = p.view(lm_logits.size())
-        p = torch.clamp(p, min=1e-8, max=2.0)
-        p = torch.log(p)
-        return p

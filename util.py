@@ -94,10 +94,7 @@ class WarmupLinearScheduler(torch.optim.lr_scheduler.LambdaLR):
 
 class FixedScheduler(torch.optim.lr_scheduler.LambdaLR):
     def __init__(self, optimizer, last_epoch=-1):
-        super(FixedScheduler, self).__init__(
-            optimizer, self.lr_lambda, last_epoch=last_epoch
-        )
-
+        super(FixedScheduler, self).__init__(optimizer, self.lr_lambda, last_epoch=last_epoch)
     def lr_lambda(self, step):
         return 1.0
 
@@ -109,27 +106,33 @@ def clip_gradients(model, clip):
             p.grad.data.mul_(clip_coef)
 
 
+#def set_optim(opt, model):
+#    #cache_p, model_p = [], []
+#    #for n, p in model.named_parameters():
+#    #    if 'cache' not in n:
+#    #        model_p.append(p)
+#    #    else:
+#    #        cache_p.append(p)
+#    if opt.optim == "adam":
+#        optimizer = torch.optim.Adam(
+#            model.parameters(), lr=opt.lr, betas=(opt.beta1, opt.beta2), eps=opt.eps
+#        )
+#    elif opt.optim == "adagrad":
+#        optimizer = torch.optim.Adagrad(model.parameters(), lr=opt.lr)
+#    elif opt.optim == "adafactor":
+#        optimizer = fairseq.optim.adafactor.Adafactor(model.parameters(), lr=opt.lr, relative_step=False)
+#    elif opt.optim == "sgd":
+#        optimizer = torch.optim.SGD(model.parameters(), lr=opt.lr)
+#    if opt.scheduler == 'linear':
+#        scheduler = WarmupLinearScheduler(optimizer, opt.warmup, t_total=opt.t_total, min_ratio=opt.min_lr/opt.lr, fixed_lr=opt.fixed_lr)
+#    elif opt.scheduler == 'fixed':
+#        scheduler = FixedScheduler(optimizer)
+#    return optimizer, scheduler
+
+
 def set_optim(opt, model):
-    #cache_p, model_p = [], []
-    #for n, p in model.named_parameters():
-    #    if 'cache' not in n:
-    #        model_p.append(p)
-    #    else:
-    #        cache_p.append(p)
-    if opt.optim == "adam":
-        optimizer = torch.optim.Adam(
-            model.parameters(), lr=opt.lr, betas=(opt.beta1, opt.beta2), eps=opt.eps
-        )
-    elif opt.optim == "adagrad":
-        optimizer = torch.optim.Adagrad(model.parameters(), lr=opt.lr)
-    elif opt.optim == "adafactor":
-        optimizer = fairseq.optim.adafactor.Adafactor(model.parameters(), lr=opt.lr, relative_step=False)
-    elif opt.optim == "sgd":
-        optimizer = torch.optim.SGD(model.parameters(), lr=opt.lr)
-    if opt.scheduler == 'linear':
-        scheduler = WarmupLinearScheduler(optimizer, opt.warmup, t_total=opt.t_total, min_ratio=opt.min_lr/opt.lr, fixed_lr=opt.fixed_lr)
-    elif opt.scheduler == 'fixed':
-        scheduler = FixedScheduler(optimizer)
+    optimizer = torch.optim.Adam(model.parameters(), lr=opt.lr)
+    scheduler = FixedScheduler(optimizer)
     return optimizer, scheduler
 
 

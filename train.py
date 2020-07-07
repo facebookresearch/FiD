@@ -18,7 +18,7 @@ import data
 logger = logging.getLogger(__name__)
 
 
-def train_evaluate(model, optimizer, scheduler, start_epoch, global_step,
+def train_evaluate(model, optimizer, scheduler, global_step,
                     train_dataset, dev_dataset, opt, collator_function, best_dev_em):
 
     if opt.is_master:
@@ -33,7 +33,7 @@ def train_evaluate(model, optimizer, scheduler, start_epoch, global_step,
         drop_last=True, num_workers=20, collate_fn=collator_function)
 
     loss, curr_loss = 0.0, 0.0
-    epoch = start_epoch
+    epoch = 1
     model.train()
     while global_step < opt.total_step:
         if opt.world_size > 1:
@@ -67,7 +67,7 @@ def train_evaluate(model, optimizer, scheduler, start_epoch, global_step,
             train_loss = util.average_master(train_loss, opt)
             curr_loss += train_loss.item()
 
-            if global_step % opt.print_freq == 0:
+            if global_step % opt.eval_freq == 0:
                 dev_em = evaluate(model, dev_dataset, dev_dataloader, tokenizer, opt)
                 if opt.is_master:
                     tb_logger.add_scalar("Evaluation", dev_em, global_step)
@@ -77,21 +77,15 @@ def train_evaluate(model, optimizer, scheduler, start_epoch, global_step,
                         model_to_save = model.module if hasattr(model, "module") else model
                         util.save(model_to_save, optimizer, scheduler, global_step, best_dev_em, opt, dir_path, 'best_dev')
                 model.train()
-            if opt.is_master and global_step % opt.print_freq == 0:
+            if opt.is_master and global_step % opt.eval_freq == 0:
                 logger.info(
                     "%d / %d -- train = %.3f | evaluation = %.3f | lr = %.6f"
-                    % (
-                        global_step,
-                        opt.total_step,
-                        curr_loss / (opt.print_freq),
-                        dev_em, 
-                        scheduler.get_last_lr()[0],
-                    )
+                    % (global_step, opt.total_step, curr_loss / (opt.eval_freq), dev_em, scheduler.get_last_lr()[0])
                 )
-                tb_logger.add_scalar("Training", curr_loss / (opt.print_freq), global_step)
+                tb_logger.add_scalar("Training", curr_loss / (opt.eval_freq), global_step)
                 curr_loss = 0
 
-            if opt.is_master and global_step % (50*opt.print_freq) == 0:
+            if opt.is_master and global_step % (50*opt.eval_freq) == 0:
                 model_to_save = model.module if hasattr(model, "module") else model
                 util.save(model_to_save, optimizer, scheduler, global_step, best_dev_em, opt, dir_path, "step-%s" % global_step)
             if global_step > opt.total_step:
@@ -99,13 +93,10 @@ def train_evaluate(model, optimizer, scheduler, start_epoch, global_step,
 
 
 def evaluate(model, dataset, dataloader, tokenizer, opt):
-    loss, curr_loss = 0.0, 0.0
     model.eval()
     if hasattr(model, "module"):
         model = model.module
     total = 0
-    answers = []
-    # f1s = []
     ems = []
     with torch.no_grad():
         for i, batch in enumerate(dataloader):
@@ -131,29 +122,24 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
                 question = example.question
                 gold = example.answers
                 ems_score = evaluation.ems(ans, gold)
-                #print(ems_score, question, 'answer', ans, 'gold', gold)
-                #print(ems_score, 'answer', ans, 'gold', gold)
 
                 ems.append(ems_score)
             if opt.is_master and (i + 1) % opt.eval_print_freq == 0:
-                logger.info(
-                    "%d / %d -- average = %.3f" % (i + 1, len(dataloader), np.mean(ems))
-                )
+                logger.info("%d / %d -- average = %.3f" % (i + 1, len(dataloader), np.mean(ems)))
 
             total += question_ids.size(0)
+
     t_loss = torch.tensor([np.mean(ems) * total], device=question_ids.device)
     t_total = torch.tensor([total], device=question_ids.device)
     t_loss = util.sum_master(t_loss, opt)
     t_total = util.sum_master(t_total, opt)
-    logger.info(t_total.item())
-
     return (t_loss / t_total).item()
 
 
 if __name__ == "__main__":
-    torch.manual_seed(0)
     options = Options()
     opt = options.parse()
+    torch.manual_seed(opt.seed)
     slurm.init_distributed_mode(opt)
     slurm.init_signal_handler()
     opt.train_batch_size = opt.per_gpu_batch_size * max(1, opt.world_size)
@@ -163,25 +149,17 @@ if __name__ == "__main__":
 
     dir_path = os.path.join(opt.checkpoint_dir, opt.name)
 
-    #model_name = "t5-small"
-
-    if not opt.model_type == 'bart':
-        model_name = "t5-" + opt.model_size
-        tokenizer = transformers.T5Tokenizer.from_pretrained(model_name)
-    else:
-        model_name = "bart-large"
-        tokenizer = transformers.BartTokenizer.from_pretrained('bart-large')
+    model_name = "t5-" + opt.model_size
+    tokenizer = transformers.T5Tokenizer.from_pretrained(model_name)
+    #model_name = "bart-large"
+    #tokenizer = transformers.BartTokenizer.from_pretrained('bart-large')
     #config = transformers.PretrainedConfig.from_pretrained(model_name)
     collator_function = data.Collator(tokenizer, opt.max_passage_length)
 
     train_examples = data.load_data(opt.train_data_path)
     train_dataset = data.Dataset(train_examples, opt.n_context, tokenizer, opt.max_passage_length, opt.no_title)
     dev_examples = data.load_data(opt.dev_data_path, global_rank=opt.global_rank, world_size=opt.world_size) #use the global rank and world size attibutes to split the dev set on multiple gpus
-    dev_dataset = data.Dataset(dev_examples, opt.n_context, tokenizer, opt.max_passage_length, opt.no_title, )
-
-    opt.t_total = (
-        opt.n_epochs * len(train_dataset) / (opt.world_size * opt.per_gpu_batch_size)
-    )
+    dev_dataset = data.Dataset(dev_examples, opt.n_context, tokenizer, opt.max_passage_length, opt.no_title)
 
     directory_exists = os.path.exists(dir_path)
     if opt.world_size > 1 and not opt.local_rank == -1:
@@ -204,23 +182,13 @@ if __name__ == "__main__":
     if opt.world_size > 1 and not opt.local_rank == -1:
         torch.distributed.barrier()
 
-    if opt.model_type == "standard":
-        model_class = transformers.T5ForConditionalGeneration
-    elif opt.model_type == "context":
-        model_class = transformers.T5CacheForConditionalGeneration
-    elif opt.model_type == "custom":
-        model_class = transformers.T5CustomForConditionalGeneration 
-    elif opt.model_type == "merge":
-        model_class = T5MergeForConditionalGeneration 
-    elif opt.model_type == 'bart':
-        model_class = transformers.BartForConditionalGeneration  
+    model_class = T5MergeForConditionalGeneration 
 
-    start_epoch = 1
     global_step = 0
     best_dev_em = 0.
 
     if not directory_exists and opt.model_path == "none":
-        model = model_class.from_pretrained(model_name) #, config=config)
+        model = model_class.from_pretrained(model_name) 
         model = model.to(opt.local_rank)
         optimizer, scheduler = util.set_optim(opt, model)
     elif opt.model_path == "none":
@@ -234,6 +202,10 @@ if __name__ == "__main__":
         )
         logger.info("Model loaded from %s" % opt.model_path) 
 
+    if opt.use_checkpointing:
+        model.encoder.checkpoint = True
+        model.decoder.checkpoint = True
+
     if opt.world_size > 1 and opt.local_rank != -1:
         model = torch.nn.parallel.DistributedDataParallel(
             model,
@@ -243,5 +215,5 @@ if __name__ == "__main__":
         )
 
     logger.info("Start training")
-    train_evaluate(model, optimizer, scheduler, start_epoch, global_step,
+    train_evaluate(model, optimizer, scheduler, global_step,
         train_dataset, dev_dataset, opt, collator_function, best_dev_em)

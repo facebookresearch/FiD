@@ -32,7 +32,7 @@ def init_signal_handler():
     """
     signal.signal(signal.SIGUSR1, sig_handler)
     signal.signal(signal.SIGTERM, term_handler)
-    logger.warning("Signal handler installed.")
+    #logger.warning("Signal handler installed.")
 
 
 def init_distributed_mode(params):

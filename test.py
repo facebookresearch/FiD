@@ -1,10 +1,8 @@
 import os
-import time
 import sys
 import torch
 import transformers
 import slurm
-import json
 import logging
 import data
 import util
@@ -20,23 +18,18 @@ logger = logging.getLogger(__name__)
 def evaluate(model, dataset, dataloader, tokenizer, opt):
     loss, curr_loss = 0.0, 0.0
     model.eval()
+    if opt.write_test_results:
+        write_path = os.path.join(opt.checkpoint_dir, opt.name, 'test_results')
+        fw = open(os.path.join(write_path, '%d.txt'%opt.global_rank), 'w')
     if hasattr(model, "module"):
         model = model.module
     total = 0
     answers = []
     ems = []
-    results = []
     with torch.no_grad():
         for i, batch in enumerate(dataloader):
-            (
-                idx,
-                question_ids,
-                question_mask,
-                answer_ids,
-                answer_mask,
-                context_ids,
-                context_mask,
-            ) = batch
+            (idx, question_ids, question_mask, answer_ids,
+                answer_mask, context_ids, context_mask) = batch
             question_ids, question_mask = question_ids.cuda(), question_mask.cuda()
             answer_ids, answer_mask = answer_ids.cuda(), answer_mask.bool().cuda()
             context_ids = [c.cuda() if c is not None else None for c in context_ids]
@@ -57,23 +50,17 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
                 gold = example.answers
                 id = example.id
                 ems_score = evaluation.ems(ans, gold)
-                results.append(str(id) + "\t" + ans)
-
-                #print(o)
-                #print(ems_score, question, 'answer', ans, 'gold', gold)
-                #print(ems_score, 'answer', ans, 'gold', gold)
-
                 ems.append(ems_score)
 
-                #with open('results_%s_%s/results_%d.txt'%(opt.dataset, opt.model_size, opt.global_rank), 'a') as f:
-                #    f.write(str(id) + "\t" + ans + '\n')
+                if opt.write_test_results:
+                    fw.write(str(id) + "\t" + ans + '\n')
+
+                total += 1
             if (i + 1) % opt.eval_print_freq == 0:
                 logger.warning(
                     "%d, %d / %d -- average = %.3f" % (opt.global_rank, i + 1, len(dataloader), np.mean(ems))
                 )
 
-            total += question_ids.size(0)
-    
     logger.warning("%d, total %d -- average = %.3f" % (opt.global_rank, total, np.mean(ems)))
     if opt.world_size > 1 and not opt.local_rank == -1:
         torch.distributed.barrier()
@@ -81,10 +68,8 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
     t_total = torch.tensor([total], device=question_ids.device)
     t_loss = util.sum_master(t_loss, opt)
     t_total = util.sum_master(t_total, opt)
-    logger.info(t_total)
-    logger.info(t_loss / t_total)
-    return (t_loss / t_total).item(), None
-    #return np.mean(ems), "\n".join(results)
+    logger.info('total number of example %d'%t_total.item())
+    return (t_loss / t_total).item()
 
 
 if __name__ == "__main__":
@@ -97,13 +82,10 @@ if __name__ == "__main__":
 
     dir_path = os.path.join(opt.checkpoint_dir, opt.name)
 
-    if not opt.model_type == 'bart':
-        model_name = "t5-" + opt.model_size
-        tokenizer = transformers.T5Tokenizer.from_pretrained(model_name)
-    else:
-        model_name = "bart-large"
-        tokenizer = transformers.BartTokenizer.from_pretrained('bart-large')
+    model_name = "t5-" + opt.model_size
     tokenizer = transformers.T5Tokenizer.from_pretrained(model_name)
+    #model_name = "bart-large"
+    #tokenizer = transformers.BartTokenizer.from_pretrained('bart-large')
 
     collator_function = data.Collator(tokenizer, opt.max_passage_length)
     test_examples = data.load_data(opt.test_data_path, global_rank=opt.global_rank, world_size=opt.world_size)
@@ -117,6 +99,8 @@ if __name__ == "__main__":
     if opt.world_size > 1 and not opt.local_rank == -1:
         torch.distributed.barrier()
     os.makedirs(dir_path, exist_ok=True)
+    if opt.write_test_results:
+        os.makedirs(os.path.join(dir_path, 'test_results'), exist_ok=True)
     if not directory_exists and opt.is_master:
         options.print_options(opt)
     if opt.world_size > 1 and not opt.local_rank == -1:
@@ -134,21 +118,9 @@ if __name__ == "__main__":
     model_class = T5MergeForConditionalGeneration
 
     logger.info("Start eval")
-    model = model_class.from_pretrained(os.path.join(opt.eval_dir, 'best_dev'))#'step-'+str(opt.eval_step)))
-    model.merge_encoding = opt.merge_encoding
-    model.set_extra_tokens(opt.extra_tokens)
-    if opt.model_type == "context":
-        model.init_cache_layers(opt.cache_layer_weights)
-    model.alpha = opt.alpha
-    model.theta = opt.theta
-    model.cache_layer = opt.cache_layer
-    #model.cache.n_head = opt.cache_n_head
-    model.merged_qc = opt.merged_qc
-    if opt.model_type == 'context':
-        model.decoder.set_topk(opt.topk)
-        model.decoder.set_selection_type(opt.selection_type)
+    model = model_class.from_pretrained(os.path.join(opt.model_path, 'checkpoint', 'best_dev'))
     model = model.cuda()
 
-    ems, results = evaluate(model, test_dataset, test_dataloader, tokenizer, opt)
+    ems = evaluate(model, test_dataset, test_dataloader, tokenizer, opt)
     
-    logger.info("Epoch %d | valid %.4f" % (opt.eval_epoch, ems))
+    logger.info("EM %.6f" % (ems))

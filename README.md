@@ -1,6 +1,6 @@
-# FiD: Fusion-in-Decoder
+# Fusion-in-Decoder
 
-### How to use your own data
+### Data format
 
 The expected data format is a list of entry examples, where each entry example is a dictionary containing
 - `id`: example id, optional

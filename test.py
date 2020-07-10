@@ -13,6 +13,7 @@ from torch.utils.tensorboard import SummaryWriter
 from options import Options
 from torch.utils.data import DataLoader, RandomSampler, DistributedSampler, SequentialSampler
 import evaluation
+import kilt.postprocess as kp
 logger = logging.getLogger(__name__)
 
 def evaluate(model, dataset, dataloader, tokenizer, opt):
@@ -122,5 +123,11 @@ if __name__ == "__main__":
     model = model.cuda()
 
     ems = evaluate(model, test_dataset, test_dataloader, tokenizer, opt)
-    
+
+    if opt.write_test_results and opt.is_master:
+        glob_path = os.path.join(opt.checkpoint_dir, opt.name, 'test_results', '*')
+        kilt_write_path = os.path.join(opt.checkpoint_dir, opt.name, 'output_kilt_format.jsonl')
+        logger.info(kilt_write_path)
+        kp.write_kilt_format(glob_path, kilt_write_path) 
+
     logger.info("EM %.6f" % (ems))

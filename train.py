@@ -11,7 +11,7 @@ import torch.distributed as dist
 from torch.utils.tensorboard import SummaryWriter
 from options import Options
 from torch.utils.data import DataLoader, RandomSampler, DistributedSampler, SequentialSampler
-from fid import T5MergeForConditionalGeneration
+from fid3 import T5MergeForConditionalGeneration
 import evaluation
 import data
 

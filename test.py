@@ -40,13 +40,6 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
             context_ids = context_ids.view(context_ids.size(0), -1)
             context_mask = context_mask.view(context_mask.size(0), -1)
 
-            #outputs = model.generate(
-            #    input_ids=question_ids,
-            #    attention_mask=question_mask,
-            #    context_ids=context_ids,
-            #    context_mask=context_mask,
-            #    max_length=50,
-            #)
             outputs = model.generate(
                 input_ids=context_ids,
                 attention_mask=context_mask,

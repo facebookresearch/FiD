@@ -53,12 +53,10 @@ def train_evaluate(model, optimizer, scheduler, global_step,
             context_ids = context_ids.view(context_ids.size(0), -1)
             context_mask = context_mask.view(context_mask.size(0), -1)
             outputs = model(
-                input_ids=question_ids,
-                attention_mask=question_mask,
+                input_ids=context_ids,
+                attention_mask=context_mask,
                 decoder_attention_mask=answer_mask,
                 lm_labels=lm_labels,
-                context_ids=context_ids,
-                context_mask=context_mask,
             )
             train_loss = outputs[0]
             train_loss.backward()
@@ -107,15 +105,17 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
                 answer_mask, context_ids, context_mask) = batch
             question_ids, question_mask = question_ids.cuda(), question_mask.cuda()
             answer_ids, answer_mask = answer_ids.cuda(), answer_mask.bool().cuda()
-            context_ids = [c.cuda() if c is not None else None for c in context_ids]
-            context_mask = [c.bool().cuda() if c is not None else None for c in context_mask]
             answer_ids.masked_fill_(~answer_mask, -100)
+            context_ids = [c.cuda()[None] if c is not None else None for c in context_ids]
+            context_mask = [c.bool().cuda()[None] if c is not None else None for c in context_mask]
+            context_ids = torch.cat(context_ids, dim=0)
+            context_mask = torch.cat(context_mask, dim=0)
+            context_ids = context_ids.view(context_ids.size(0), -1)
+            context_mask = context_mask.view(context_mask.size(0), -1)
 
             outputs = model.generate(
-                input_ids=question_ids,
-                attention_mask=question_mask,
-                context_ids=context_ids,
-                context_mask=context_mask,
+                input_ids=context_ids,
+                attention_mask=context_mask,
                 max_length=50,
             )
 
@@ -208,6 +208,7 @@ if __name__ == "__main__":
     if opt.use_checkpointing:
         model.encoder.checkpoint = True
         model.decoder.checkpoint = True
+    model.encoder.nc = opt.n_context
 
     if opt.world_size > 1 and opt.local_rank != -1:
         model = torch.nn.parallel.DistributedDataParallel(

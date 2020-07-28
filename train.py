@@ -12,6 +12,7 @@ from torch.utils.tensorboard import SummaryWriter
 from options import Options
 from torch.utils.data import DataLoader, RandomSampler, DistributedSampler, SequentialSampler
 from fid3 import T5MergeForConditionalGeneration
+from fidbart import BartForConditionalGeneration
 import evaluation
 import data
 
@@ -152,11 +153,15 @@ if __name__ == "__main__":
 
     dir_path = os.path.join(opt.checkpoint_dir, opt.name)
 
-    model_name = "t5-" + opt.model_size
-    tokenizer = transformers.T5Tokenizer.from_pretrained(model_name)
+    #model_name = "t5-" + opt.model_size
+    #tokenizer = transformers.T5Tokenizer.from_pretrained(model_name)
+    model_name = "facebook/bart-base"
+    tokenizer = transformers.BartTokenizer.from_pretrain(model_name)
     #model_name = "bart-large"
     #tokenizer = transformers.BartTokenizer.from_pretrained('bart-large')
     #config = transformers.PretrainedConfig.from_pretrained(model_name)
+    #model_class = T5MergeForConditionalGeneration
+    model_class = BartForConditionalGeneration
     collator_function = data.Collator(tokenizer, opt.max_passage_length)
 
     train_examples = data.load_data(opt.train_data_path)
@@ -185,7 +190,6 @@ if __name__ == "__main__":
     if opt.world_size > 1 and not opt.local_rank == -1:
         torch.distributed.barrier()
 
-    model_class = T5MergeForConditionalGeneration 
 
     global_step = 0
     best_dev_em = 0.

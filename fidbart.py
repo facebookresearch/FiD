@@ -25,15 +25,15 @@ import torch.nn.functional as F
 from torch import Tensor, nn
 from torch.nn import CrossEntropyLoss
 
-from .activations import ACT2FN
-from .configuration_bart import BartConfig
-from .file_utils import (
+from transformers.activations import ACT2FN
+from transformers.configuration_bart import BartConfig
+from transformers.file_utils import (
     add_code_sample_docstrings,
     add_end_docstrings,
     add_start_docstrings,
     add_start_docstrings_to_callable,
 )
-from .modeling_utils import PreTrainedModel
+from transformers.modeling_utils import PreTrainedModel
 
 
 logger = logging.getLogger(__name__)
@@ -296,6 +296,11 @@ class BartEncoder(nn.Module):
                 - **all_attentions** (List[Tensor]): Attention weights for each layer.
                 During training might not be of length n_layers because of layer dropout.
         """
+        bsz, tc = input_ids.shape
+        plen = tc // self.nc
+        nc = self.nc
+        input_ids = input_ids.view(bsz*nc, plen)
+        attention_mask = attention_mask.view(bsz*nc, plen)
         # check attention mask and invert
         if attention_mask is not None:
             attention_mask = invert_mask(attention_mask)
@@ -332,6 +337,7 @@ class BartEncoder(nn.Module):
         encoder_states = [hidden_state.transpose(0, 1) for hidden_state in encoder_states]
         x = x.transpose(0, 1)
 
+        x = x.view(bsz, nc * plen, -1)
         return x, encoder_states, all_attentions
 
 

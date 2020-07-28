@@ -783,6 +783,7 @@ class T5Stack(T5PreTrainedModel):
 
 
         outputs = (hidden_states,)
+        print(hidden_states.shape)
         if use_cache is True:
             assert self.is_decoder, "`use_cache` can only be set to `True` if {} is used as a decoder".format(self)
             outputs = outputs + (present_key_value_states,)
@@ -964,6 +965,7 @@ class T5Model(T5PreTrainedModel):
             )
 
         hidden_states = encoder_outputs[0]
+        print(hidden_states.shape)
 
         # If decoding with past key value states, only the last tokens
         # should be given as an input

@@ -6,7 +6,7 @@ import slurm
 import logging
 import data
 import util
-from fid import T5MergeForConditionalGeneration
+from fidt5 import T5MergeForConditionalGeneration
 import numpy as np
 import torch.distributed as dist
 from torch.utils.tensorboard import SummaryWriter
@@ -33,14 +33,21 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
                 answer_mask, context_ids, context_mask) = batch
             question_ids, question_mask = question_ids.cuda(), question_mask.cuda()
             answer_ids, answer_mask = answer_ids.cuda(), answer_mask.bool().cuda()
-            context_ids = [c.cuda() if c is not None else None for c in context_ids]
-            context_mask = [c.bool().cuda() if c is not None else None for c in context_mask]
+            context_ids = [c.cuda()[None] if c is not None else None for c in context_ids]
+            context_mask = [c.bool().cuda()[None] if c is not None else None for c in context_mask]
+            context_ids = torch.cat(context_ids, dim=0)
+            context_mask = torch.cat(context_mask, dim=0)
 
+            #outputs = model.generate(
+            #    input_ids=question_ids,
+            #    attention_mask=question_mask,
+            #    context_ids=context_ids,
+            #    context_mask=context_mask,
+            #    max_length=50,
+            #)
             outputs = model.generate(
-                input_ids=question_ids,
-                attention_mask=question_mask,
-                context_ids=context_ids,
-                context_mask=context_mask,
+                input_ids=context_ids,
+                attention_mask=context_mask,
                 max_length=50,
             )
 

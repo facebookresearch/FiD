@@ -670,7 +670,6 @@ class T5Stack(T5PreTrainedModel):
             bsz, tc = input_ids.shape
             plen = tc // self.nc
             nc = self.nc
-            #bsz, nc, plen = input_ids.shape
             input_ids = input_ids.view(bsz*nc, plen)
             attention_mask = attention_mask.view(bsz*nc, plen)
 

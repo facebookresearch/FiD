@@ -42,12 +42,16 @@ def train_evaluate(model, optimizer, scheduler, global_step,
         for i, batch in enumerate(train_dataloader):
             global_step += 1
             (idx, question_ids, question_mask, answer_ids,
-                answer_mask, context_ids, context_mask) = batch
+                 answer_mask, context_ids, context_mask) = batch
             question_ids, question_mask = question_ids.cuda(), question_mask.cuda()
             answer_ids, answer_mask = answer_ids.cuda(), answer_mask.bool().cuda()
             lm_labels = answer_ids.masked_fill(~answer_mask, -100)
-            context_ids = [c.cuda() if c is not None else None for c in context_ids]
-            context_mask = [c.bool().cuda() if c is not None else None for c in context_mask]
+            context_ids = [c.cuda()[None] if c is not None else None for c in context_ids]
+            context_mask = [c.bool().cuda()[None] if c is not None else None for c in context_mask]
+            context_ids = torch.cat(context_ids, dim=0)
+            context_mask = torch.cat(context_mask, dim=0)
+            context_ids = context_ids.view(context_ids.size(0), -1)
+            context_mask = context_mask.view(context_mask.size(0), -1)
             outputs = model(
                 input_ids=question_ids,
                 attention_mask=question_mask,

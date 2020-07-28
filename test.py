@@ -37,8 +37,8 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
             context_mask = [c.bool().cuda()[None] if c is not None else None for c in context_mask]
             context_ids = torch.cat(context_ids, dim=0)
             context_mask = torch.cat(context_mask, dim=0)
-            context_ids = context_ids.view(context_ids.size(0))
-            context_mask = context_mask.view(context_mask.size(0))
+            context_ids = context_ids.view(context_ids.size(0), -1)
+            context_mask = context_mask.view(context_mask.size(0), -1)
 
             #outputs = model.generate(
             #    input_ids=question_ids,

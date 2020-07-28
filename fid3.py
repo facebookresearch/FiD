@@ -667,8 +667,8 @@ class T5Stack(T5PreTrainedModel):
         output_hidden_states=None,
     ):
         if not self.is_decoder:
-            tc, plen = input_ids.shape
-            bsz = tc // self.nc
+            bsz, tc = input_ids.shape
+            plen = tc // self.nc
             nc = self.nc
             #bsz, nc, plen = input_ids.shape
             input_ids = input_ids.view(bsz*nc, plen)

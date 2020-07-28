@@ -46,7 +46,7 @@ def train_evaluate(model, optimizer, scheduler, global_step,
                  answer_mask, context_ids, context_mask) = batch
             question_ids, question_mask = question_ids.cuda(), question_mask.cuda()
             answer_ids, answer_mask = answer_ids.cuda(), answer_mask.bool().cuda()
-            lm_labels = answer_ids.masked_fill(~answer_mask, -100)
+            labels = answer_ids.masked_fill(~answer_mask, -100)
             context_ids = [c.cuda()[None] if c is not None else None for c in context_ids]
             context_mask = [c.bool().cuda()[None] if c is not None else None for c in context_mask]
             context_ids = torch.cat(context_ids, dim=0)
@@ -57,7 +57,7 @@ def train_evaluate(model, optimizer, scheduler, global_step,
                 input_ids=context_ids,
                 attention_mask=context_mask,
                 decoder_attention_mask=answer_mask,
-                lm_labels=lm_labels,
+                labels=labels,
             )
             train_loss = outputs[0]
             train_loss.backward()

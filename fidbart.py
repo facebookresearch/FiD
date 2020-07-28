@@ -998,6 +998,10 @@ class BartForConditionalGeneration(PretrainedBartModel):
         if labels is not None:
             use_cache = False
 
+        if labels is not None and decoder_input_ids is None:
+            # get decoder inputs from shifting lm labels to the right
+            decoder_input_ids = self._shift_right(labels)
+
         outputs = self.model(
             input_ids,
             attention_mask=attention_mask,
@@ -1074,6 +1078,27 @@ class BartForConditionalGeneration(PretrainedBartModel):
 
     def get_output_embeddings(self):
         return _make_linear_from_emb(self.model.shared)  # make it on the fly
+
+    def _shift_right(self, input_ids):
+        decoder_start_token_id = self.config.decoder_start_token_id
+        pad_token_id = self.config.pad_token_id
+
+        assert (
+            decoder_start_token_id is not None
+        ), "self.model.config.decoder_start_token_id has to be defined. In T5 it is usually set to the pad_token_id. See T5 docs for more information"
+
+        # shift inputs to the right
+        shifted_input_ids = input_ids.new_zeros(input_ids.shape)
+        shifted_input_ids[..., 1:] = input_ids[..., :-1].clone()
+        shifted_input_ids[..., 0] = decoder_start_token_id
+
+        assert pad_token_id is not None, "self.model.config.pad_token_id has to be defined."
+        # replace possible -100 values in labels by `pad_token_id`
+        shifted_input_ids.masked_fill_(shifted_input_ids == -100, pad_token_id)
+
+        assert torch.all(shifted_input_ids >= 0).item(), "Verify that `labels` has only positive values and -100"
+
+        return shifted_input_ids
 
 
 class SinusoidalPositionalEmbedding(nn.Embedding):

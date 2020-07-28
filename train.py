@@ -39,7 +39,6 @@ def train_evaluate(model, optimizer, scheduler, global_step,
         if opt.world_size > 1:
             train_sampler.set_epoch(epoch)
         epoch += 1
-        dev_em = evaluate(model, dev_dataset, dev_dataloader, tokenizer, opt)
         for i, batch in enumerate(train_dataloader):
             global_step += 1
             (idx, question_ids, question_mask, answer_ids,

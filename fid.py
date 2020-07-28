@@ -399,32 +399,6 @@ class T5LayerSelfAttention(nn.Module):
         outputs = (layer_output,) + attention_output[1:]  # add attentions if we output them
         return outputs
 
-    def reduce_qk(self):
-        q = self.SelfAttention.q.weight
-        k = self.SelfAttention.k.weight
-        r_k, r_q = [], []
-        n_dk = 16
-        for i in range(12):
-            wq = q[i*64:(i+1)*64]
-            wk = k[i*64:(i+1)*64]
-            W = torch.cat((wq, wk), dim=1)
-            U, S, V = torch.svd(W)
-            P = U[:, :n_dk]
-            wq = P.T @ wq
-            wk = P.T @ wk
-            r_k.append(wk)
-            r_q.append(wq)
-        r_k = torch.cat(r_k, dim=0)
-        r_q = torch.cat(r_q, dim=0)
-
-        self.SelfAttention.q = nn.Linear(764, 12 * n_dk)
-        self.SelfAttention.k = nn.Linear(764, 12 * n_dk)
-        with torch.no_grad():
-            self.selfAttention.q.weight = r_q
-            self.selfAttention.k.weight = r_k
-        self.SelfAttention.d_kv = n_dk
-
-
 class T5LayerCrossAttention(nn.Module):
     def __init__(self, config, has_relative_attention_bias=False):
         super().__init__()
@@ -1074,6 +1048,7 @@ class T5MergeForConditionalGeneration(T5PreTrainedModel):
         all_ids = torch.cat(input_ids, dim=0)
         all_masks = torch.cat(input_masks, dim=0)
         outputs = self.encoder(all_ids, attention_mask=all_masks)[0]
+<<<<<<< HEAD
         split_outputs = torch.split(outputs, shapes, dim=0) 
         concat_outputs = []
         concat_ids = []
@@ -1101,7 +1076,41 @@ class T5MergeForConditionalGeneration(T5PreTrainedModel):
         concat_outputs = torch.cat(concat_outputs, dim=0)
         concat_ids = torch.cat(concat_ids, dim=0)
         return concat_outputs, concat_masks.bool(), concat_ids
+=======
+        ##print(shapes, all_ids.shape, all_masks.shape, outputs.shape)
+        bsz = len(input_ids)
+        np = shapes[0]
+        plen = outputs.size(1)
+        all_ids = all_ids.view(bsz, np*plen)
+        all_masks = all_masks.view(bsz, np*plen)
+        outputs = outputs.view(bsz, np*plen, self.model_dim)
 
+        #split_outputs = torch.split(outputs, shapes, dim=0) 
+        #concat_outputs = []
+        #concat_ids = []
+        #for i in range(len(input_ids)):
+        #    p = split_outputs[i]
+        #    m = input_masks[i]
+        #    p = p.reshape(-1, self.model_dim)
+        #    m = m.view(-1)
+        #    p = p[m]
+        #    ids = input_ids[i].view(-1)[m]
+        #    concat_ids.append(ids[None])
+        #    concat_outputs.append(p[None])
+
+        #sizes = [o.size(1) for o in concat_outputs]
+        #max_length = np.max(sizes)
+        #concat_outputs = [torch.cat((o, torch.zeros((1, max_length-o.size(1), self.model_dim)).cuda()), dim=1) for o in concat_outputs]  
+        #concat_masks = [torch.cat(
+        #        (torch.ones((1, sizes[i]), dtype=torch.bool).cuda(),  
+        #        torch.zeros((1, max_length-sizes[i]), dtype=torch.bool).cuda()), dim=1) for i in range(len(concat_outputs))]
+        #concat_ids = [torch.cat((ids, torch.zeros((1, max_length-ids.size(1))).long().cuda()), dim=1) for ids in concat_ids] 
+
+        #concat_masks = torch.cat(concat_masks, dim=0)
+        #concat_outputs = torch.cat(concat_outputs, dim=0)
+        #concat_ids = torch.cat(concat_ids, dim=0)
+        #return concat_outputs, concat_masks.bool(), concat_ids
+        return outputs, all_masks, all_ids
     @torch.no_grad()
     def generate(
         self,

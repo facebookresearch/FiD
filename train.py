@@ -156,7 +156,7 @@ if __name__ == "__main__":
     #model_name = "t5-" + opt.model_size
     #tokenizer = transformers.T5Tokenizer.from_pretrained(model_name)
     model_name = "facebook/bart-base"
-    tokenizer = transformers.BartTokenizer.from_pretrain(model_name)
+    tokenizer = transformers.BartTokenizer.from_pretrained(model_name)
     #model_name = "bart-large"
     #tokenizer = transformers.BartTokenizer.from_pretrained('bart-large')
     #config = transformers.PretrainedConfig.from_pretrained(model_name)
@@ -212,7 +212,9 @@ if __name__ == "__main__":
     if opt.use_checkpointing:
         model.encoder.checkpoint = True
         model.decoder.checkpoint = True
-    model.encoder.nc = opt.n_context
+    #model.encoder.nc = opt.n_context
+    model.model.encoder.nc = opt.n_context
+
 
     if opt.world_size > 1 and opt.local_rank != -1:
         model = torch.nn.parallel.DistributedDataParallel(

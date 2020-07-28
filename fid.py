@@ -1048,7 +1048,6 @@ class T5MergeForConditionalGeneration(T5PreTrainedModel):
         all_ids = torch.cat(input_ids, dim=0)
         all_masks = torch.cat(input_masks, dim=0)
         outputs = self.encoder(all_ids, attention_mask=all_masks)[0]
-<<<<<<< HEAD
         split_outputs = torch.split(outputs, shapes, dim=0) 
         concat_outputs = []
         concat_ids = []

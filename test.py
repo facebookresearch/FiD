@@ -36,6 +36,7 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
             context_ids = [c.cuda() if c is not None else None for c in context_ids]
             context_mask = [c.bool().cuda() if c is not None else None for c in context_mask]
 
+            #print(question_ids.shape)
             outputs = model.generate(
                 input_ids=question_ids,
                 attention_mask=question_mask,

@@ -1080,19 +1080,14 @@ class BartForConditionalGeneration(PretrainedBartModel):
         return _make_linear_from_emb(self.model.shared)  # make it on the fly
 
     def _shift_right(self, input_ids):
-        decoder_start_token_id = self.config.decoder_start_token_id
-        pad_token_id = self.config.pad_token_id
-
-        assert (
-            decoder_start_token_id is not None
-        ), "self.model.config.decoder_start_token_id has to be defined. In T5 it is usually set to the pad_token_id. See T5 docs for more information"
+        decoder_start_token_id = 0
+        pad_token_id = 1
 
         # shift inputs to the right
         shifted_input_ids = input_ids.new_zeros(input_ids.shape)
         shifted_input_ids[..., 1:] = input_ids[..., :-1].clone()
         shifted_input_ids[..., 0] = decoder_start_token_id
 
-        assert pad_token_id is not None, "self.model.config.pad_token_id has to be defined."
         # replace possible -100 values in labels by `pad_token_id`
         shifted_input_ids.masked_fill_(shifted_input_ids == -100, pad_token_id)
 

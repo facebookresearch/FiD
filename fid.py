@@ -1077,15 +1077,17 @@ class T5MergeForConditionalGeneration(T5PreTrainedModel):
         split_outputs = torch.split(outputs, shapes, dim=0) 
         concat_outputs = []
         concat_ids = []
+        concat_masks = []
         for i in range(len(input_ids)):
             p = split_outputs[i]
             m = input_masks[i]
             p = p.reshape(-1, self.model_dim)
             m = m.view(-1)
-            p = p[m]
-            ids = input_ids[i].view(-1)[m]
+            #p = p[m]
+            #ids = input_ids[i].view(-1)[m]
             concat_ids.append(ids[None])
             concat_outputs.append(p[None])
+            concat_masks.append(m[None])
 
         sizes = [o.size(1) for o in concat_outputs]
         max_length = np.max(sizes)

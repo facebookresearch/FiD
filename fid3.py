@@ -665,6 +665,10 @@ class T5Stack(T5PreTrainedModel):
         output_attentions=None,
         output_hidden_states=None,
     ):
+        if not self.is_decoder:
+            bsz, nc, plen = input_ids.shape
+            input_ids = input_ids.view(bsz*nc, plen)
+            attention_mask = attention_mask.view(bsz*nc, plen)
 
         use_cache = use_cache if use_cache is not None else self.config.use_cache
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
@@ -766,9 +770,13 @@ class T5Stack(T5PreTrainedModel):
         hidden_states = self.final_layer_norm(hidden_states)
         hidden_states = self.dropout(hidden_states)
 
+        if not self.is_decoder:
+            hidden_states = hidden_states.view(bsz, nc*plen, -1)
+
         # Add last layer
         if output_hidden_states:
             all_hidden_states = all_hidden_states + (hidden_states,)
+
 
         outputs = (hidden_states,)
         if use_cache is True:
@@ -983,7 +991,7 @@ class T5Model(T5PreTrainedModel):
 
 
 @add_start_docstrings("""T5 Model with a `language modeling` head on top. """, T5_START_DOCSTRING)
-class T5ForConditionalGeneration(T5PreTrainedModel):
+class T5MergeForConditionalGeneration(T5PreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
         self.model_dim = config.d_model

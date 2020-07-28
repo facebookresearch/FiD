@@ -26,9 +26,9 @@ import torch.nn.functional as F
 from torch import nn
 from torch.nn import CrossEntropyLoss
 
-from .configuration_t5 import T5Config
-from .file_utils import DUMMY_INPUTS, DUMMY_MASK, add_start_docstrings, add_start_docstrings_to_callable
-from .modeling_utils import PreTrainedModel, find_pruneable_heads_and_indices, prune_linear_layer
+from transformers.configuration_t5 import T5Config
+from transformers.file_utils import DUMMY_INPUTS, DUMMY_MASK, add_start_docstrings, add_start_docstrings_to_callable
+from transformers.modeling_utils import PreTrainedModel, find_pruneable_heads_and_indices, prune_linear_layer
 
 
 logger = logging.getLogger(__name__)
@@ -579,7 +579,7 @@ class T5PreTrainedModel(PreTrainedModel):
         factor = self.config.initializer_factor  # Used for testing weights initialization
         if isinstance(module, T5LayerNorm):
             module.weight.data.fill_(factor * 1.0)
-        elif isinstance(module, (T5Model, T5ForConditionalGeneration)):
+        elif isinstance(module, (T5Model, T5MergeForConditionalGeneration)):
             # Mesh TensorFlow embeddings initialization
             # See https://github.com/tensorflow/mesh/blob/fa19d69eafc9a482aff0b59ddd96b025c0cb207d/mesh_tensorflow/layers.py#L1624
             module.shared.weight.data.normal_(mean=0.0, std=factor * 1.0)

@@ -37,6 +37,8 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
             context_mask = [c.bool().cuda()[None] if c is not None else None for c in context_mask]
             context_ids = torch.cat(context_ids, dim=0)
             context_mask = torch.cat(context_mask, dim=0)
+            context_ids = context_ids.view(-1, context_ids.size(-1))
+            context_mask = context_mask.view(-1, context_mask.size(-1))
 
             #outputs = model.generate(
             #    input_ids=question_ids,
@@ -128,6 +130,7 @@ if __name__ == "__main__":
     logger.info("Start eval")
     model = model_class.from_pretrained(os.path.join(opt.model_path, 'checkpoint', 'best_dev'))
     model = model.cuda()
+    model.encoder.nc = opt.n_context
 
     ems = evaluate(model, test_dataset, test_dataloader, tokenizer, opt)
 

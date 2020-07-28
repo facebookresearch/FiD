@@ -641,6 +641,7 @@ class T5Stack(T5PreTrainedModel):
         self.final_layer_norm = T5LayerNorm(config.d_model, eps=config.layer_norm_epsilon)
         self.dropout = nn.Dropout(config.dropout_rate)
 
+
         self.init_weights()
 
     def get_input_embeddings(self):
@@ -666,7 +667,10 @@ class T5Stack(T5PreTrainedModel):
         output_hidden_states=None,
     ):
         if not self.is_decoder:
-            bsz, nc, plen = input_ids.shape
+            tc, plen = input_ids.shape
+            bsz = tc // self.nc
+            nc = self.nc
+            #bsz, nc, plen = input_ids.shape
             input_ids = input_ids.view(bsz*nc, plen)
             attention_mask = attention_mask.view(bsz*nc, plen)
 

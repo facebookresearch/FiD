@@ -55,6 +55,7 @@ def train_evaluate(model, optimizer, scheduler, global_step,
             context_mask = context_mask.view(context_mask.size(0), -1)
             decoder_input_ids = answer_ids[:, :-1]
             labels = labels[:, 1:]
+            print(labels, decoder_input_ids)
             outputs = model(
                 input_ids=context_ids,
                 attention_mask=context_mask,

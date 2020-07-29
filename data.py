@@ -59,13 +59,17 @@ class Collator(object):
     def __init__(self, tokenizer, max_passage_length):
         self.tokenizer = tokenizer
         self.max_passage_length = max_passage_length
+        self.type = 'bart'
 
     def __call__(self, batch):
         index = torch.tensor([ex['index'] for ex in batch])
         question = [ex['question'] for ex in batch]
         question = self.tokenizer.batch_encode_plus(question, pad_to_max_length=True, return_tensors="pt")
         question_ids, question_mask = question['input_ids'], question['attention_mask']
-        target = [ex['target'] + ' </s>' for ex in batch]
+        if self.type == 'bart':
+            target = [ex['target'] for ex in batch]
+        else:
+            target = [ex['target'] + ' </s>' for ex in batch]
         target = self.tokenizer.batch_encode_plus(target, pad_to_max_length=True, return_tensors="pt")
         target_ids, target_mask = target["input_ids"], target["attention_mask"]
 

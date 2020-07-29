@@ -53,10 +53,13 @@ def train_evaluate(model, optimizer, scheduler, global_step,
             context_mask = torch.cat(context_mask, dim=0)
             context_ids = context_ids.view(context_ids.size(0), -1)
             context_mask = context_mask.view(context_mask.size(0), -1)
+            decoder_input_ids = answer_ids[:, :-1]
+            labels = labels[:, 1:]
             outputs = model(
                 input_ids=context_ids,
                 attention_mask=context_mask,
                 decoder_attention_mask=answer_mask,
+                decoder_input_ids=decoder_input_ids,
                 labels=labels,
             )
             train_loss = outputs[0]

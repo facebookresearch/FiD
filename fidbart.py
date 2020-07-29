@@ -859,7 +859,6 @@ class BartModel(PretrainedBartModel):
                 decoder_padding_mask=decoder_attention_mask,
                 causal_mask_dtype=self.shared.weight.dtype,
             )
-            print(decoder_input_ids)
         else:
             decoder_padding_mask, causal_mask = None, None
 
@@ -1004,7 +1003,11 @@ class BartForConditionalGeneration(PretrainedBartModel):
 
         #if labels is not None and decoder_input_ids is None:
             # get decoder inputs from shifting lm labels to the right
+<<<<<<< HEAD
          #   decoder_input_ids = self._shift_right(labels)
+=======
+        #    decoder_input_ids = self._shift_right(labels)
+>>>>>>> 5b93de58080c6abce0e48052e5476ba7b36e4889
 
         outputs = self.model(
             input_ids,

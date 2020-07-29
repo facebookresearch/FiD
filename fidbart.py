@@ -337,7 +337,6 @@ class BartEncoder(nn.Module):
         encoder_states = [hidden_state.transpose(0, 1) for hidden_state in encoder_states]
         x = x.transpose(0, 1)
 
-        print(x.shape)
         x = x.reshape(bsz, nc * plen, -1)
         return x, encoder_states, all_attentions
 
@@ -849,7 +848,10 @@ class BartModel(PretrainedBartModel):
         use_cache = use_cache if use_cache is not None else self.config.use_cache
 
         # make masks if user doesn't supply
+        import pdb
+        pdb.set_trace()
         if not use_cache:
+            print(decoder_input_ids)
             decoder_input_ids, decoder_padding_mask, causal_mask = _prepare_bart_decoder_inputs(
                 self.config,
                 input_ids,
@@ -857,6 +859,7 @@ class BartModel(PretrainedBartModel):
                 decoder_padding_mask=decoder_attention_mask,
                 causal_mask_dtype=self.shared.weight.dtype,
             )
+            print(decoder_input_ids)
         else:
             decoder_padding_mask, causal_mask = None, None
 
@@ -997,10 +1000,11 @@ class BartForConditionalGeneration(PretrainedBartModel):
 
         if labels is not None:
             use_cache = False
+            decoder_input_ids = labels
 
-        if labels is not None and decoder_input_ids is None:
+        #if labels is not None and decoder_input_ids is None:
             # get decoder inputs from shifting lm labels to the right
-            decoder_input_ids = self._shift_right(labels)
+         #   decoder_input_ids = self._shift_right(labels)
 
         outputs = self.model(
             input_ids,
@@ -1015,8 +1019,9 @@ class BartForConditionalGeneration(PretrainedBartModel):
         )
         lm_logits = F.linear(outputs[0], self.model.shared.weight, bias=self.final_logits_bias)
         outputs = (lm_logits,) + outputs[1:]  # Add cache, hidden states and attention if they are here
-        print(lm_logits.shape, labels.shape)
         if labels is not None:
+            print(labels)
+            print(lm_logits.shape, labels.shape)
             loss_fct = nn.CrossEntropyLoss()
             # TODO(SS): do we need to ignore pad tokens in labels?
             masked_lm_loss = loss_fct(lm_logits.view(-1, self.config.vocab_size), labels.view(-1))

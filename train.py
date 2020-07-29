@@ -157,6 +157,8 @@ if __name__ == "__main__":
     #tokenizer = transformers.T5Tokenizer.from_pretrained(model_name)
     model_name = "facebook/bart-base"
     tokenizer = transformers.BartTokenizer.from_pretrained(model_name)
+    print(tokenizer.pad_token)
+    print(tokenizer.pad_token_id)
     #model_name = "bart-large"
     #tokenizer = transformers.BartTokenizer.from_pretrained('bart-large')
     #config = transformers.PretrainedConfig.from_pretrained(model_name)

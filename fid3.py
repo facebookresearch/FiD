@@ -23,6 +23,7 @@ import warnings
 
 import torch
 import torch.nn.functional as F
+import torch.utils.checkpoint
 from torch import nn
 from torch.nn import CrossEntropyLoss
 
@@ -280,14 +281,23 @@ class T5MergeForConditionalGeneration(T5PreTrainedModel):
         # Encode if needed (training, first prediction pass)
         if encoder_outputs is None:
             # Convert encoder inputs in embeddings if needed
-            encoder_outputs = self.encoder(
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                inputs_embeds=inputs_embeds,
-                head_mask=head_mask,
-                output_attentions=output_attentions,
-                output_hidden_states=output_hidden_states,
-            )
+            if self.checkpoint:
+                encoder_outputs = torch.utils.checkpoint.checkpoint(
+                    self.encoder,
+                    input_ids,
+                    attention_mask, None, None,
+                    inputs_embeds, head_mask,
+                    None, None, output_attentions, output_hidden_states
+                )
+            else:
+                encoder_outputs = self.encoder(
+                    input_ids=input_ids,
+                    attention_mask=attention_mask,
+                    inputs_embeds=inputs_embeds,
+                    head_mask=head_mask,
+                    output_attentions=output_attentions,
+                    output_hidden_states=output_hidden_states,
+                )
 
         hidden_states = encoder_outputs[0]
 

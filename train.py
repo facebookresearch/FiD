@@ -42,9 +42,7 @@ def train_evaluate(model, optimizer, scheduler, global_step,
         epoch += 1
         for i, batch in enumerate(train_dataloader):
             global_step += 1
-            (idx, question_ids, question_mask, answer_ids,
-                 answer_mask, context_ids, context_mask) = batch
-            question_ids, question_mask = question_ids.cuda(), question_mask.cuda()
+            (idx, answer_ids, answer_mask, context_ids, context_mask) = batch
             answer_ids, answer_mask = answer_ids.cuda(), answer_mask.bool().cuda()
             labels = answer_ids.masked_fill(~answer_mask, -100)
             context_ids = [c.cuda()[None] if c is not None else None for c in context_ids]
@@ -127,7 +125,6 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
             for k, o in enumerate(outputs):
                 ans = tokenizer.decode(o, skip_special_tokens=True)
                 example = dataset.get_example(idx[k])
-                question = example.question
                 gold = example.answers
                 ems_score = evaluation.ems(ans, gold)
                 #print(ans, gold)
@@ -158,16 +155,17 @@ if __name__ == "__main__":
 
     dir_path = os.path.join(opt.checkpoint_dir, opt.name)
 
-    #model_name = "t5-" + opt.model_size
-    #tokenizer = transformers.T5Tokenizer.from_pretrained(model_name)
-    model_name = "facebook/bart-base"
-    tokenizer = transformers.BartTokenizer.from_pretrained(model_name)
-    #model_name = "bart-large"
-    #tokenizer = transformers.BartTokenizer.from_pretrained('bart-large')
-    #config = transformers.PretrainedConfig.from_pretrained(model_name)
-    #model_class = T5MergeForConditionalGeneration
-    model_class = BartForConditionalGeneration
-    collator_function = data.Collator(tokenizer, opt.max_passage_length)
+    assert opt.model_type == 'bart' or opt.model_type == 't5', 'Expected model type bart or t5'
+    if 'bart' in opt.model_type:
+        model_name = 'facebook/bart-' + opt.model_size
+        model_class = BartForConditionalGeneration
+        tokenizer = transformers.BartTokenizer.from_pretrained(model_name)
+    elif 't5' in opt.model_type:
+        model_name = 't5-' + opt.model_size
+        model_class = T5MergeForConditionalGeneration
+        tokenizer = transformers.T5Tokenizer.from_pretrained(model_name)
+
+    collator_function = data.Collator(opt, tokenizer, opt.max_passage_length)
 
     train_examples = data.load_data(opt.train_data_path)
     train_dataset = data.Dataset(train_examples, opt.n_context, tokenizer, opt.max_passage_length, opt.no_title)

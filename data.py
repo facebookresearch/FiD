@@ -62,8 +62,6 @@ class Collator(object):
     def __call__(self, batch):
         index = torch.tensor([ex['index'] for ex in batch])
         question = [ex['question'] for ex in batch]
-        question = self.tokenizer.batch_encode_plus(question, pad_to_max_length=True, return_tensors="pt")
-        question_ids, question_mask = question['input_ids'], question['attention_mask']
         if self.model_type == 'bart':
             target = [ex['target'] for ex in batch]
         else:
@@ -101,7 +99,7 @@ class Collator(object):
             batch_passage_ids.append(p_ids)
             batch_passage_masks.append(p_masks)
 
-        return (index, question_ids, question_mask, target_ids, target_mask, batch_passage_ids, batch_passage_masks)
+        return (index, target_ids, target_mask, batch_passage_ids, batch_passage_masks)
 
 
 def load_data(data_path, global_rank=-1, world_size=-1):

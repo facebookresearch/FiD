@@ -104,9 +104,7 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
     ems = []
     with torch.no_grad():
         for i, batch in enumerate(dataloader):
-            (idx, question_ids, question_mask, answer_ids,
-                answer_mask, context_ids, context_mask) = batch
-            question_ids, question_mask = question_ids.cuda(), question_mask.cuda()
+            (idx, answer_ids, answer_mask, context_ids, context_mask) = batch
             answer_ids, answer_mask = answer_ids.cuda(), answer_mask.bool().cuda()
             answer_ids.masked_fill_(~answer_mask, -100)
             context_ids = [c.cuda()[None] if c is not None else None for c in context_ids]

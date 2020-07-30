@@ -868,6 +868,7 @@ class BartModel(PretrainedBartModel):
             if self.checkpoint:
                 encoder_outputs = torch.utils.checkpoint.checkpoint(
                     self.encoder,
+                    input_ids,
                     attention_mask,
                     output_attentions,
                     output_hidden_states,

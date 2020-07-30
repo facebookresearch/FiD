@@ -45,8 +45,6 @@ class Dataset(torch.utils.data.Dataset):
                 to_concatenate += [self.title_prefix, t]
             to_concatenate += [self.context_prefix, c]
             text = ' '.join(to_concatenate)
-            #text = self.tokenizer.encode(text)
-            #text = text if len(text) < self.max_passage_length else text[:self.max_passage_length]
             passages.append(text)
 
         return {'index':index, 'question':question, 'target':target, 'passages':passages}
@@ -56,17 +54,17 @@ class Dataset(torch.utils.data.Dataset):
 
 
 class Collator(object):
-    def __init__(self, tokenizer, max_passage_length):
+    def __init__(self, opt, tokenizer, max_passage_length):
         self.tokenizer = tokenizer
         self.max_passage_length = max_passage_length
-        self.type = 'bart'
+        self.model_type = opt.model_type
 
     def __call__(self, batch):
         index = torch.tensor([ex['index'] for ex in batch])
         question = [ex['question'] for ex in batch]
         question = self.tokenizer.batch_encode_plus(question, pad_to_max_length=True, return_tensors="pt")
         question_ids, question_mask = question['input_ids'], question['attention_mask']
-        if self.type == 'bart':
+        if self.self_type == 'bart':
             target = [ex['target'] for ex in batch]
         else:
             target = [ex['target'] + ' </s>' for ex in batch]

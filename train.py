@@ -130,7 +130,7 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
                 question = example.question
                 gold = example.answers
                 ems_score = evaluation.ems(ans, gold)
-                print(ans, gold)
+                #print(ans, gold)
 
                 ems.append(ems_score)
             if opt.is_master and (i + 1) % opt.eval_print_freq == 0:

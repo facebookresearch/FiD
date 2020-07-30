@@ -62,7 +62,7 @@ class Collator(object):
     def __call__(self, batch):
         index = torch.tensor([ex['index'] for ex in batch])
         question = [ex['question'] for ex in batch]
-        if self.self_type == 'bart':
+        if self.model_type == 'bart':
             target = [ex['target'] for ex in batch]
         else:
             target = [ex['target'] + ' </s>' for ex in batch]

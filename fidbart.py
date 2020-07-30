@@ -22,6 +22,7 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import torch
 import torch.nn.functional as F
+import torch.utils.checkpoint
 from torch import Tensor, nn
 from torch.nn import CrossEntropyLoss
 
@@ -821,6 +822,7 @@ class BartModel(PretrainedBartModel):
 
         self.encoder = BartEncoder(config, self.shared)
         self.decoder = BartDecoder(config, self.shared)
+        self.checkpoint = True
 
         self.init_weights()
 
@@ -863,12 +865,20 @@ class BartModel(PretrainedBartModel):
         assert decoder_input_ids is not None
 
         if encoder_outputs is None:
-            encoder_outputs = self.encoder(
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                output_attentions=output_attentions,
-                output_hidden_states=output_hidden_states,
-            )
+            if self.checkpoint:
+                encoder_outputs = torch.utils.checkpoint.checkpoint(
+                    self.encoder,
+                    attention_mask,
+                    output_attentions,
+                    output_hidden_states,
+                )
+            else:
+                encoder_outputs = self.encoder(
+                    input_ids=input_ids,
+                    attention_mask=attention_mask,
+                    output_attentions=output_attentions,
+                    output_hidden_states=output_hidden_states,
+                )
         assert isinstance(encoder_outputs, tuple)
         # decoder outputs consists of (dec_features, layer_state, dec_hidden, dec_attn)
         decoder_outputs = self.decoder(

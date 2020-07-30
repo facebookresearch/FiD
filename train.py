@@ -56,11 +56,10 @@ def train_evaluate(model, optimizer, scheduler, global_step,
             decoder_input_ids = answer_ids[:, :-1]
             decoder_attention_mask = answer_mask[:, :-1]
             labels = labels[:, 1:]
-            print(labels, decoder_input_ids)
             outputs = model(
                 input_ids=context_ids,
                 attention_mask=context_mask,
-                decoder_attention_mask=answer_mask,
+                decoder_attention_mask=decoder_attention_mask,
                 decoder_input_ids=decoder_input_ids,
                 labels=labels,
             )
@@ -131,6 +130,7 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
                 question = example.question
                 gold = example.answers
                 ems_score = evaluation.ems(ans, gold)
+                print(ans, gold)
 
                 ems.append(ems_score)
             if opt.is_master and (i + 1) % opt.eval_print_freq == 0:
@@ -162,8 +162,6 @@ if __name__ == "__main__":
     #tokenizer = transformers.T5Tokenizer.from_pretrained(model_name)
     model_name = "facebook/bart-base"
     tokenizer = transformers.BartTokenizer.from_pretrained(model_name)
-    print(tokenizer.pad_token)
-    print(tokenizer.pad_token_id)
     #model_name = "bart-large"
     #tokenizer = transformers.BartTokenizer.from_pretrained('bart-large')
     #config = transformers.PretrainedConfig.from_pretrained(model_name)

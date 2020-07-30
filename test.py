@@ -7,6 +7,7 @@ import logging
 import data
 import util
 from fid3 import T5MergeForConditionalGeneration
+from fidbart import BartForConditionalGeneration
 import numpy as np
 import torch.distributed as dist
 from torch.utils.tensorboard import SummaryWriter
@@ -85,12 +86,17 @@ if __name__ == "__main__":
 
     dir_path = os.path.join(opt.checkpoint_dir, opt.name)
 
-    model_name = "t5-" + opt.model_size
-    tokenizer = transformers.T5Tokenizer.from_pretrained(model_name)
-    #model_name = "bart-large"
-    #tokenizer = transformers.BartTokenizer.from_pretrained('bart-large')
+    assert opt.model_type == 'bart' or opt.model_type == 't5', 'Expected model type bart or t5'
+    if 'bart' in opt.model_type:
+        model_name = 'facebook/bart-' + opt.model_size
+        model_class = BartForConditionalGeneration
+        tokenizer = transformers.BartTokenizer.from_pretrained(model_name)
+    elif 't5' in opt.model_type:
+        model_name = 't5-' + opt.model_size
+        model_class = T5MergeForConditionalGeneration
+        tokenizer = transformers.T5Tokenizer.from_pretrained(model_name)
 
-    collator_function = data.Collator(tokenizer, opt.max_passage_length)
+    collator_function = data.Collator(opt, tokenizer)
     test_examples = data.load_data(opt.test_data_path, global_rank=opt.global_rank, world_size=opt.world_size)
     test_dataset = data.Dataset(test_examples, opt.n_context, tokenizer, opt.max_passage_length, opt.no_title, )
 
@@ -118,7 +124,6 @@ if __name__ == "__main__":
         handlers=handlers,
     )
 
-    model_class = T5MergeForConditionalGeneration
 
     logger.info("Start eval")
     model = model_class.from_pretrained(os.path.join(opt.model_path, 'checkpoint', 'best_dev'))

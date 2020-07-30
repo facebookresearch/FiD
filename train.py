@@ -163,7 +163,7 @@ if __name__ == "__main__":
         model_class = T5MergeForConditionalGeneration
         tokenizer = transformers.T5Tokenizer.from_pretrained(model_name)
 
-    collator_function = data.Collator(opt, tokenizer, opt.max_passage_length)
+    collator_function = data.Collator(opt, tokenizer)
 
     train_examples = data.load_data(opt.train_data_path)
     train_dataset = data.Dataset(train_examples, opt.n_context, tokenizer, opt.max_passage_length, opt.no_title)

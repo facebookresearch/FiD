@@ -56,7 +56,7 @@ class Dataset(torch.utils.data.Dataset):
 class Collator(object):
     def __init__(self, opt, tokenizer, max_passage_length):
         self.tokenizer = tokenizer
-        self.max_passage_length = max_passage_length
+        self.max_passage_length = opt.max_passage_length
         self.model_type = opt.model_type
 
     def __call__(self, batch):

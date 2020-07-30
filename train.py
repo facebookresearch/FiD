@@ -215,8 +215,10 @@ if __name__ == "__main__":
     if opt.use_checkpointing:
         model.encoder.checkpoint = True
         model.decoder.checkpoint = True
-    #model.encoder.nc = opt.n_context
-    model.model.encoder.nc = opt.n_context
+    if opt.model_type == 'bart':
+        model.model.encoder.nc = opt.n_context
+    elif opt.model_type == 't5':
+        model.encoder.nc = opt.n_context
 
 
     if opt.world_size > 1 and opt.local_rank != -1:

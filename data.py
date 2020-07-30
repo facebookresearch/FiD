@@ -64,7 +64,7 @@ class Collator(object):
         question = [ex['question'] for ex in batch]
         question = self.tokenizer.batch_encode_plus(question, pad_to_max_length=True, return_tensors="pt")
         question_ids, question_mask = question['input_ids'], question['attention_mask']
-        if self.self_type == 'bart':
+        if self.model_type == 'bart':
             target = [ex['target'] for ex in batch]
         else:
             target = [ex['target'] + ' </s>' for ex in batch]

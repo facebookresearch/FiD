@@ -876,7 +876,7 @@ class BartModel(PretrainedBartModel):
         assert decoder_input_ids is not None
 
         if encoder_outputs is None:
-            if self.checkpoint:
+            if True:
                 encoder_outputs = torch.utils.checkpoint.checkpoint(
                     self.encoder,
                     input_ids,

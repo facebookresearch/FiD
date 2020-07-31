@@ -125,16 +125,15 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
                 example = dataset.get_example(idx[k])
                 gold = example.answers
                 ems_score = evaluation.ems(ans, gold)
+                total+=1
                 #print(ans, gold)
 
                 ems.append(ems_score)
             if opt.is_master and (i + 1) % opt.eval_print_freq == 0:
                 logger.info("%d / %d -- average = %.3f" % (i + 1, len(dataloader), np.mean(ems)))
 
-            total += question_ids.size(0)
-
-    t_loss = torch.tensor([np.mean(ems) * total], device=question_ids.device)
-    t_total = torch.tensor([total], device=question_ids.device)
+    t_loss = torch.tensor([np.mean(ems) * total], device=answer_ids.device)
+    t_total = torch.tensor([total], device=answer_ids.device)
     t_loss = util.sum_master(t_loss, opt)
     t_total = util.sum_master(t_total, opt)
     return (t_loss / t_total).item()

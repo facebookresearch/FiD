@@ -281,7 +281,7 @@ class T5MergeForConditionalGeneration(T5PreTrainedModel):
         # Encode if needed (training, first prediction pass)
         if encoder_outputs is None:
             # Convert encoder inputs in embeddings if needed
-            if self.checkpoint:
+            if True:
                 encoder_outputs = torch.utils.checkpoint.checkpoint(
                     self.encoder,
                     input_ids,

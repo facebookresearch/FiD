@@ -30,9 +30,8 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
     ems = []
     with torch.no_grad():
         for i, batch in enumerate(dataloader):
-            (idx, question_ids, question_mask, answer_ids,
+            (idx, answer_ids,
                 answer_mask, context_ids, context_mask) = batch
-            question_ids, question_mask = question_ids.cuda(), question_mask.cuda()
             answer_ids, answer_mask = answer_ids.cuda(), answer_mask.bool().cuda()
             context_ids = [c.cuda()[None] if c is not None else None for c in context_ids]
             context_mask = [c.bool().cuda()[None] if c is not None else None for c in context_mask]
@@ -68,8 +67,8 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
     logger.warning("%d, total %d -- average = %.3f" % (opt.global_rank, total, np.mean(ems)))
     if opt.world_size > 1 and not opt.local_rank == -1:
         torch.distributed.barrier()
-    t_loss = torch.tensor([np.mean(ems) * total], device=question_ids.device)
-    t_total = torch.tensor([total], device=question_ids.device)
+    t_loss = torch.tensor([np.mean(ems) * total], device=answer_ids.device)
+    t_total = torch.tensor([total], device=answer_ids.device)
     t_loss = util.sum_master(t_loss, opt)
     t_total = util.sum_master(t_total, opt)
     logger.info('total number of example %d'%t_total.item())

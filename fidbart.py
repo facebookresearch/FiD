@@ -245,6 +245,8 @@ class EncoderLayer(nn.Module):
         x = residual + x
         if not self.normalize_before:
             x = self.final_layer_norm(x)
+        print(x, attn_weights)
+        attn_weights = torch.ones(10)
         return x, attn_weights
 
 

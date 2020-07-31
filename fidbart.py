@@ -281,8 +281,10 @@ class BartEncoder(nn.Module):
         self.layernorm_embedding = LayerNorm(embed_dim) if config.normalize_embedding else nn.Identity()
         # mbart has one extra layer_norm
         self.layer_norm = LayerNorm(config.d_model) if config.normalize_before else None
+        self.output_attentions = False
+        self.output_hidden_states = False
 
-    def forward(self, input_ids, attention_mask=None, output_attentions=False, output_hidden_states=False):
+    def forward(self, input_ids, attention_mask=None):
         """
         Args:
             input_ids (LongTensor): tokens in the source language of shape
@@ -318,29 +320,29 @@ class BartEncoder(nn.Module):
 
         encoder_states, all_attentions = [], []
         for encoder_layer in self.layers:
-            if output_hidden_states:
+            if self.output_hidden_states:
                 encoder_states.append(x)
             # add LayerDrop (see https://arxiv.org/abs/1909.11556 for description)
             dropout_probability = random.uniform(0, 1)
             if self.training and (dropout_probability < self.layerdrop):  # skip the layer
                 attn = None
             else:
-                if True:
-                    x, attn = torch.utils.checkpoint.checkpoint(
-                        encoder_layer,
-                        x,
-                        attention_mask,
-                        output_attentions,
-                    )
-                else:
-                    x, attn = encoder_layer(x, attention_mask, output_attentions=output_attentions)
+                #if True:
+                #    x, attn = torch.utils.checkpoint.checkpoint(
+                #        encoder_layer,
+                #        x,
+                #        attention_mask,
+                #        output_attentions,
+                #    )
+                #else:
+                x, attn = encoder_layer(x, attention_mask, output_attentions=self.output_attentions)
 
-            if output_attentions:
+            if self.output_attentions:
                 all_attentions.append(attn)
 
         if self.layer_norm:
             x = self.layer_norm(x)
-        if output_hidden_states:
+        if self.output_hidden_states:
             encoder_states.append(x)
 
         # T x B x C -> B x T x C
@@ -872,21 +874,21 @@ class BartModel(PretrainedBartModel):
         assert decoder_input_ids is not None
 
         if encoder_outputs is None:
-            #if self.checkpoint:
-            #    encoder_outputs = torch.utils.checkpoint.checkpoint(
-            #        self.encoder,
-            #        input_ids,
-            #        attention_mask,
-            #        output_attentions,
-            #        output_hidden_states,
-            #    )
-            #else:
-            encoder_outputs = self.encoder(
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                output_attentions=output_attentions,
-                output_hidden_states=output_hidden_states,
-            )
+            if self.checkpoint:
+                encoder_outputs = torch.utils.checkpoint.checkpoint(
+                    self.encoder,
+                    input_ids,
+                    attention_mask,
+                    #output_attentions,
+                    #output_hidden_states,
+                )
+            else:
+                encoder_outputs = self.encoder(
+                    input_ids=input_ids,
+                    attention_mask=attention_mask,
+                    #output_attentions=output_attentions,
+                    #output_hidden_states=output_hidden_states,
+                )
         assert isinstance(encoder_outputs, tuple)
         # decoder outputs consists of (dec_features, layer_state, dec_hidden, dec_attn)
         decoder_outputs = self.decoder(

@@ -213,7 +213,7 @@ class EncoderLayer(nn.Module):
         self.final_layer_norm = LayerNorm(self.embed_dim)
         self.output_attentions = False
 
-    def forward(self, x, encoder_padding_mask): # output_attentions=False):
+    def forward(self, x, encoder_padding_mask, tensor_for_checkpoint=None,): # output_attentions=False):
         """
         Args:
             x (Tensor): input to the layer of shape `(seq_len, batch, embed_dim)`
@@ -246,7 +246,6 @@ class EncoderLayer(nn.Module):
         x = residual + x
         if not self.normalize_before:
             x = self.final_layer_norm(x)
-        attn_weights = torch.ones(10)
         return x, attn_weights
 
 
@@ -285,6 +284,7 @@ class BartEncoder(nn.Module):
         self.layer_norm = LayerNorm(config.d_model) if config.normalize_before else None
         self.output_attentions = False
         self.output_hidden_states = False
+        self.tensor_for_checkpoint = torch.ones(1, dtype=torch.float32, requires_grad=True)  # dummy tensor for checkpointing
 
     def forward(self, input_ids, attention_mask=None):
         """
@@ -334,6 +334,7 @@ class BartEncoder(nn.Module):
                         encoder_layer,
                         x,
                         attention_mask,
+                        self.tensor_for_checkpoint,
                         #output_attentions,
                     )
                 else:

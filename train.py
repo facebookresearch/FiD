@@ -209,12 +209,15 @@ if __name__ == "__main__":
         )
         logger.info("Model loaded from %s" % opt.model_path) 
 
-    if opt.use_checkpointing:
-        model.encoder.checkpoint = True
-        model.decoder.checkpoint = True
+    
     if opt.model_type == 'bart':
         model.model.encoder.nc = opt.n_context
+        if opt.use_checkpointing:
+            model.model.encoder.checkpoint = True
     elif opt.model_type == 't5':
+        if opt.use_checkpointing:
+            model.checkpoint = True
+            #model.decoder.checkpoint = True
         model.encoder.nc = opt.n_context
 
 

@@ -287,6 +287,7 @@ class BartEncoder(nn.Module):
         self.output_attentions = False
         self.output_hidden_states = False
         self.tensor_for_checkpoint = torch.ones(1, dtype=torch.float32, requires_grad=True)  # dummy tensor for checkpointing
+        self.checkpoint = False
 
     def forward(self, input_ids, attention_mask=None):
         """
@@ -331,7 +332,7 @@ class BartEncoder(nn.Module):
             if self.training and (dropout_probability < self.layerdrop):  # skip the layer
                 attn = None
             else:
-                if True:
+                if self.checkpoint:
                     x, attn = torch.utils.checkpoint.checkpoint(
                         encoder_layer,
                         x,

@@ -54,7 +54,7 @@ class Dataset(torch.utils.data.Dataset):
 
 
 class Collator(object):
-    def __init__(self, opt, tokenizer, max_passage_length):
+    def __init__(self, opt, tokenizer):
         self.tokenizer = tokenizer
         self.max_passage_length = opt.max_passage_length
         self.model_type = opt.model_type
@@ -108,7 +108,7 @@ def load_data(data_path, global_rank=-1, world_size=-1):
 
     examples = [] 
     for k, example in enumerate(data):
-        #if k == 10:
+        #if k == 50:
         #    break
         if global_rank > -1 and not k%world_size==global_rank:
             continue

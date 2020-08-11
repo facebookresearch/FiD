@@ -36,6 +36,7 @@ def train_evaluate(model, optimizer, scheduler, global_step,
     loss, curr_loss = 0.0, 0.0
     epoch = 1
     model.train()
+    #dev_em = evaluate(model, dev_dataset, dev_dataloader, tokenizer, opt)
     while global_step < opt.total_step:
         if opt.world_size > 1:
             train_sampler.set_epoch(epoch)
@@ -216,7 +217,7 @@ if __name__ == "__main__":
             model.model.encoder.checkpoint = True
     elif opt.model_type == 't5':
         if opt.use_checkpointing:
-            model.checkpoint = True
+            model.encoder.checkpoint = True
             #model.decoder.checkpoint = True
         model.encoder.nc = opt.n_context
 

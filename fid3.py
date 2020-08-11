@@ -30,7 +30,7 @@ from torch.nn import CrossEntropyLoss
 from transformers.configuration_t5 import T5Config
 from transformers.file_utils import DUMMY_INPUTS, DUMMY_MASK, add_start_docstrings, add_start_docstrings_to_callable
 from transformers.modeling_utils import PreTrainedModel, find_pruneable_heads_and_indices, prune_linear_layer
-from transformers.modeling_t5 import T5LayerNorm, T5Block, T5PreTrainedModel
+from transformers.modeling_t5 import T5LayerNorm, T5Block, T5PreTrainedModel, T5LayerSelfAttention, T5LayerCrossAttention, T5LayerFF
 
 
 logger = logging.getLogger(__name__)
@@ -127,8 +127,6 @@ class T5Block(nn.Module):
             # Combine self attn and cross attn key value states
             if present_key_value_state is not None:
                 present_key_value_state = present_key_value_state + cross_attention_outputs[1]
-            else:
-                present_key_value_state = torch.ones(1, requires_grad=True)
 
             # Keep cross-attention outputs and relative position weights
             attention_outputs = attention_outputs + cross_attention_outputs[2:]
@@ -138,6 +136,8 @@ class T5Block(nn.Module):
         outputs = (hidden_states,)
 
         # Add attentions if we output them
+        if present_key_value_state is None:
+            present_key_value_state = torch.ones(1, requires_grad=True)
         outputs = outputs + (present_key_value_state,) + attention_outputs
         return outputs  # hidden-states, present_key_value_states, (self-attention weights), (self-attention position bias), (cross-attention weights), (cross-attention position bias)
 
@@ -156,6 +156,7 @@ class T5Stack(T5PreTrainedModel):
 
 
         self.init_weights()
+        self.checkpoint = False
 
     def get_input_embeddings(self):
         return self.embed_tokens
@@ -255,31 +256,34 @@ class T5Stack(T5PreTrainedModel):
             if output_hidden_states:
                 all_hidden_states = all_hidden_states + (hidden_states,)
 
-            layer_outputs = torch.utils.checkpoint.checkpoint(
-                    layer_module,
+
+            if not self.is_decoder and self.checkpoint:
+                hidden_states = hidden_states.contiguous()
+                extended_attention_mask = extended_attention_mask.contiguous()
+                layer_outputs = torch.utils.checkpoint.checkpoint(
+                        layer_module,
+                        hidden_states,
+                        extended_attention_mask,
+                        position_bias,
+                        #encoder_hidden_states,
+                        #encoder_extended_attention_mask,
+                        #encoder_decoder_position_bias,
+                        #head_mask[i],
+                        #past_key_value_state,
+                    )
+            else:
+                layer_outputs = layer_module(
                     hidden_states,
-                    extended_attention_mask,
-                    position_bias,
-                    encoder_hidden_states,
-                    encoder_extended_attention_mask,
-                    encoder_decoder_position_bias,
-                    head_mask[i],
-                    past_key_value_state,
-                    use_cache,
-                    output_attentions,
+                    attention_mask=extended_attention_mask,
+                    position_bias=position_bias,
+                    encoder_hidden_states=encoder_hidden_states,
+                    encoder_attention_mask=encoder_extended_attention_mask,
+                    encoder_decoder_position_bias=encoder_decoder_position_bias,
+                    head_mask=head_mask[i],
+                    past_key_value_state=past_key_value_state,
+                    use_cache=use_cache,
+                    output_attentions=output_attentions,
                 )
-            #layer_outputs = layer_module(
-            #    hidden_states,
-            #    attention_mask=extended_attention_mask,
-            #    position_bias=position_bias,
-            #    encoder_hidden_states=encoder_hidden_states,
-            #    encoder_attention_mask=encoder_extended_attention_mask,
-            #    encoder_decoder_position_bias=encoder_decoder_position_bias,
-            #    head_mask=head_mask[i],
-            #    past_key_value_state=past_key_value_state,
-            #    use_cache=use_cache,
-            #    output_attentions=output_attentions,
-            #)
             # layer_outputs is a tuple with:
             # hidden-states, key-value-states, (self-attention weights), (self-attention position bias), (cross-attention weights), (cross-attention position bias)
             hidden_states, present_key_value_state = layer_outputs[:2]
@@ -385,15 +389,6 @@ class T5MergeForConditionalGeneration(T5PreTrainedModel):
         # Encode if needed (training, first prediction pass)
         if encoder_outputs is None:
             # Convert encoder inputs in embeddings if needed
-            #if self.checkpoint:
-            #    encoder_outputs = torch.utils.checkpoint.checkpoint(
-            #        self.encoder,
-            #        input_ids,
-            #        attention_mask, None, None,
-            #        inputs_embeds, head_mask,
-            #        None, None, output_attentions, output_hidden_states
-            #    )
-            #else:
             encoder_outputs = self.encoder(
                 input_ids=input_ids,
                 attention_mask=attention_mask,

@@ -96,8 +96,11 @@ class Collator(object):
                 p_masks.append(m[None])
             p_ids = torch.cat(p_ids, dim=0)
             p_masks = torch.cat(p_masks, dim=0)
-            batch_passage_ids.append(p_ids)
-            batch_passage_masks.append(p_masks)
+            batch_passage_ids.append(p_ids[None])
+            batch_passage_masks.append(p_masks[None])
+        
+        batch_passage_ids = torch.cat(batch_passage_ids, dim=0)
+        batch_passage_masks = torch.cat(batch_passage_masks, dim=0)
 
         return (index, target_ids, target_mask, batch_passage_ids, batch_passage_masks)
 

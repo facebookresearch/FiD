@@ -11,7 +11,7 @@ import torch.distributed as dist
 from torch.utils.tensorboard import SummaryWriter
 from options import Options
 from torch.utils.data import DataLoader, RandomSampler, DistributedSampler, SequentialSampler
-from fid3 import T5MergeForConditionalGeneration
+from fidt5 import T5MergeForConditionalGeneration
 from fidbart import BartForConditionalGeneration
 import evaluation
 import data
@@ -36,7 +36,6 @@ def train_evaluate(model, optimizer, scheduler, global_step,
     loss, curr_loss = 0.0, 0.0
     epoch = 1
     model.train()
-    #dev_em = evaluate(model, dev_dataset, dev_dataloader, tokenizer, opt)
     while global_step < opt.total_step:
         if opt.world_size > 1:
             train_sampler.set_epoch(epoch)
@@ -48,13 +47,17 @@ def train_evaluate(model, optimizer, scheduler, global_step,
             labels = answer_ids.masked_fill(~answer_mask, -100)
             context_ids = [c.cuda()[None] if c is not None else None for c in context_ids]
             context_mask = [c.bool().cuda()[None] if c is not None else None for c in context_mask]
-            context_ids = torch.cat(context_ids, dim=0)
-            context_mask = torch.cat(context_mask, dim=0)
+            #context_ids = torch.cat(context_ids, dim=0)
+            #context_mask = torch.cat(context_mask, dim=0)
             context_ids = context_ids.view(context_ids.size(0), -1)
             context_mask = context_mask.view(context_mask.size(0), -1)
-            decoder_input_ids = answer_ids[:, :-1]
-            decoder_attention_mask = answer_mask[:, :-1]
-            labels = labels[:, 1:]
+            if 'bart' in opt.type:
+                decoder_input_ids = answer_ids[:, :-1]
+                decoder_attention_mask = answer_mask[:, :-1]
+                labels = labels[:, 1:]
+            else:
+                decoder_input_ids = None
+
             outputs = model(
                 input_ids=context_ids,
                 attention_mask=context_mask,
@@ -110,8 +113,8 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
             answer_ids.masked_fill_(~answer_mask, -100)
             context_ids = [c.cuda()[None] if c is not None else None for c in context_ids]
             context_mask = [c.bool().cuda()[None] if c is not None else None for c in context_mask]
-            context_ids = torch.cat(context_ids, dim=0)
-            context_mask = torch.cat(context_mask, dim=0)
+            #context_ids = torch.cat(context_ids, dim=0)
+            #context_mask = torch.cat(context_mask, dim=0)
             context_ids = context_ids.view(context_ids.size(0), -1)
             context_mask = context_mask.view(context_mask.size(0), -1)
 
@@ -127,7 +130,6 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
                 gold = example.answers
                 ems_score = evaluation.ems(ans, gold)
                 total+=1
-                #print(ans, gold)
 
                 ems.append(ems_score)
             if opt.is_master and (i + 1) % opt.eval_print_freq == 0:
@@ -206,7 +208,7 @@ if __name__ == "__main__":
         logger.info("Model loaded from %s" % dir_path)
     else:
         model, optimizer, scheduler, opt_checkpoint, global_step, best_dev_em = util.load(
-            model_class, opt.model_path, opt, reset_params=True, name="step-"+str(opt.global_step),
+            model_class, opt.model_path, opt, reset_params=True, name="latest",
         )
         logger.info("Model loaded from %s" % opt.model_path) 
 
@@ -218,7 +220,6 @@ if __name__ == "__main__":
     elif opt.model_type == 't5':
         if opt.use_checkpointing:
             model.encoder.checkpoint = True
-            #model.decoder.checkpoint = True
         model.encoder.nc = opt.n_context
 
 

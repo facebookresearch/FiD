@@ -1,5 +1,46 @@
 # Fusion-in-Decoder
 
+## Dependencies
+
+- Python 3
+- [NumPy](http://www.numpy.org/)
+- [PyTorch](http://pytorch.org/) (currently tested on version 1.6.0)
+- [Transformers](http://huggingface.co/transformers/) (version 3.0.2, unlikely to work with a different version)
+
+### Download data
+
+### Train
+
+[`train.py`](train.py) provides the code for training a model from scratch. An example usage of the script with some options is given below:
+
+```shell
+python train.py \
+  --use_checkpointing \
+  --train_data_path $tp \
+  --dev_data_path $dp \
+  --model_size base \
+  --per_gpu_batch_size 4 \
+  --n_context 10 \
+  --name my_experiment \
+  --checkpoint_dir checkpoint \
+  --eval_freq 500
+```  
+
+### Test
+
+[`test.py`](test.py) provides the script to evaluate the performance of the model. An example usage of the script is provided below.
+
+```shell
+python test.py \
+  --model_path my_model_path \
+  --test_data_path my_test_data.json \
+  --model_size base \
+  --per_gpu_batch_size 4 \
+  --n_context 10 \
+  --name my_test \
+  --checkpoint_dir checkpoint \
+```  
+
 ### Data format
 
 The expected data format is a list of entry examples, where each entry example is a dictionary containing

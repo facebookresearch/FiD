@@ -6,7 +6,7 @@ import slurm
 import logging
 import data
 import util
-from fid3 import T5MergeForConditionalGeneration
+from fidt5 import T5MergeForConditionalGeneration
 from fidbart import BartForConditionalGeneration
 import numpy as np
 import torch.distributed as dist

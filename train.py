@@ -11,7 +11,7 @@ import torch.distributed as dist
 from torch.utils.tensorboard import SummaryWriter
 from options import Options
 from torch.utils.data import DataLoader, RandomSampler, DistributedSampler, SequentialSampler
-from fidt5 import T5MergeForConditionalGeneration
+from fidt5 import FiDT5
 from fidbart import BartForConditionalGeneration
 import evaluation
 import data
@@ -35,6 +35,7 @@ def train_evaluate(model, optimizer, scheduler, global_step,
 
     loss, curr_loss = 0.0, 0.0
     epoch = 1
+    scaler = torch.cuda.amp.GradScaler()
     model.train()
     while global_step < opt.total_step:
         if opt.world_size > 1:
@@ -45,31 +46,44 @@ def train_evaluate(model, optimizer, scheduler, global_step,
             (idx, answer_ids, answer_mask, context_ids, context_mask) = batch
             answer_ids, answer_mask = answer_ids.cuda(), answer_mask.bool().cuda()
             labels = answer_ids.masked_fill(~answer_mask, -100)
-            context_ids = [c.cuda()[None] if c is not None else None for c in context_ids]
-            context_mask = [c.bool().cuda()[None] if c is not None else None for c in context_mask]
-            #context_ids = torch.cat(context_ids, dim=0)
-            #context_mask = torch.cat(context_mask, dim=0)
+            context_ids, context_mask = context_ids.cuda(), context_mask.cuda()
             context_ids = context_ids.view(context_ids.size(0), -1)
             context_mask = context_mask.view(context_mask.size(0), -1)
-            if 'bart' in opt.type:
+            if 'bart' in opt.model_type:
                 decoder_input_ids = answer_ids[:, :-1]
                 decoder_attention_mask = answer_mask[:, :-1]
                 labels = labels[:, 1:]
             else:
                 decoder_input_ids = None
 
-            outputs = model(
-                input_ids=context_ids,
-                attention_mask=context_mask,
-                decoder_attention_mask=decoder_attention_mask,
-                decoder_input_ids=decoder_input_ids,
-                labels=labels,
-            )
-            train_loss = outputs[0]
-            train_loss.backward()
-            util.clip_gradients(model, opt.clip)
-            optimizer.step()
+
             model.zero_grad()
+            #outputs = model(
+            #    input_ids=context_ids,
+            #    attention_mask=context_mask,
+            #    decoder_attention_mask=None,
+            #    decoder_input_ids=decoder_input_ids,
+            #    labels=labels,
+            #)
+            with torch.cuda.amp.autocast():
+                outputs = model(
+                    input_ids=context_ids,
+                    attention_mask=context_mask,
+                    decoder_attention_mask=answer_mask,
+                    decoder_input_ids=decoder_input_ids,
+                    labels=labels,
+                )
+            train_loss = outputs[0]
+
+            scaler.scale(train_loss).backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), opt.clip*scaler.get_scale())
+            scaler.step(optimizer)
+            scaler.update()
+
+            #train_loss.backward()
+            #util.clip_gradients(model, opt.clip)
+            #optimizer.step()
+
             scheduler.step()
 
             train_loss = util.average_master(train_loss, opt)
@@ -111,10 +125,8 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
             (idx, answer_ids, answer_mask, context_ids, context_mask) = batch
             answer_ids, answer_mask = answer_ids.cuda(), answer_mask.bool().cuda()
             answer_ids.masked_fill_(~answer_mask, -100)
-            context_ids = [c.cuda()[None] if c is not None else None for c in context_ids]
-            context_mask = [c.bool().cuda()[None] if c is not None else None for c in context_mask]
-            #context_ids = torch.cat(context_ids, dim=0)
-            #context_mask = torch.cat(context_mask, dim=0)
+            context_ids = context_ids.cuda()
+            context_mask = context_mask.cuda()
             context_ids = context_ids.view(context_ids.size(0), -1)
             context_mask = context_mask.view(context_mask.size(0), -1)
 
@@ -126,20 +138,15 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
 
             for k, o in enumerate(outputs):
                 ans = tokenizer.decode(o, skip_special_tokens=True)
-                example = dataset.get_example(idx[k])
-                gold = example.answers
+                gold = dataset.get_example(idx[k]).answers
                 ems_score = evaluation.ems(ans, gold)
                 total+=1
-
                 ems.append(ems_score)
             if opt.is_master and (i + 1) % opt.eval_print_freq == 0:
                 logger.info("%d / %d -- average = %.3f" % (i + 1, len(dataloader), np.mean(ems)))
 
-    t_loss = torch.tensor([np.mean(ems) * total], device=answer_ids.device)
-    t_total = torch.tensor([total], device=answer_ids.device)
-    t_loss = util.sum_master(t_loss, opt)
-    t_total = util.sum_master(t_total, opt)
-    return (t_loss / t_total).item()
+    score, total = util.weighted_average(np.mean(ems), total, opt)
+    return score
 
 
 if __name__ == "__main__":
@@ -162,7 +169,7 @@ if __name__ == "__main__":
         tokenizer = transformers.BartTokenizer.from_pretrained(model_name)
     elif 't5' in opt.model_type:
         model_name = 't5-' + opt.model_size
-        model_class = T5MergeForConditionalGeneration
+        model_class = FiDT5
         tokenizer = transformers.T5Tokenizer.from_pretrained(model_name)
 
     collator_function = data.Collator(opt, tokenizer)
@@ -214,13 +221,13 @@ if __name__ == "__main__":
 
     
     if opt.model_type == 'bart':
-        model.model.encoder.nc = opt.n_context
+        model.model.encoder.n_passages = opt.n_context
         if opt.use_checkpointing:
             model.model.encoder.checkpoint = True
     elif opt.model_type == 't5':
         if opt.use_checkpointing:
             model.encoder.checkpoint = True
-        model.encoder.nc = opt.n_context
+        model.encoder.n_passages = opt.n_context
 
 
     if opt.world_size > 1 and opt.local_rank != -1:

@@ -6,7 +6,7 @@ import slurm
 import logging
 import data
 import util
-from fidt5 import T5MergeForConditionalGeneration
+from fidt5 import FiDT5
 from fidbart import BartForConditionalGeneration
 import numpy as np
 import torch.distributed as dist
@@ -67,12 +67,9 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
     logger.warning("%d, total %d -- average = %.3f" % (opt.global_rank, total, np.mean(ems)))
     if opt.world_size > 1 and not opt.local_rank == -1:
         torch.distributed.barrier()
-    t_loss = torch.tensor([np.mean(ems) * total], device=answer_ids.device)
-    t_total = torch.tensor([total], device=answer_ids.device)
-    t_loss = util.sum_master(t_loss, opt)
-    t_total = util.sum_master(t_total, opt)
-    logger.info('total number of example %d'%t_total.item())
-    return (t_loss / t_total).item()
+    score, total = util.weighted_average(np.mean(ems), total, opt)
+    logger.info('total number of example %d'%total)
+    return score
 
 
 if __name__ == "__main__":
@@ -92,8 +89,8 @@ if __name__ == "__main__":
         tokenizer = transformers.BartTokenizer.from_pretrained(model_name)
     elif 't5' in opt.model_type:
         model_name = 't5-' + opt.model_size
-        model_class = T5MergeForConditionalGeneration
-        tokenizer = transformers.T5Tokenizer.from_pretrained(model_name)
+        model_class = FiDT5
+        tokenizer = transformers.T5Tokenizer.from_pretrained(model_name, return_dict=False)
 
     collator_function = data.Collator(opt, tokenizer)
     test_examples = data.load_data(opt.test_data_path, global_rank=opt.global_rank, world_size=opt.world_size)
@@ -124,11 +121,11 @@ if __name__ == "__main__":
     )
 
 
-    logger.info("Start eval")
     model = model_class.from_pretrained(os.path.join(opt.model_path, 'checkpoint', 'best_dev'))
     model = model.cuda()
-    model.encoder.nc = opt.n_context
+    model.encoder.n_passages = opt.n_context
 
+    logger.info("Start eval")
     ems = evaluate(model, test_dataset, test_dataloader, tokenizer, opt)
 
     if opt.write_test_results and opt.is_master:

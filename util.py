@@ -174,3 +174,9 @@ def sum_master(x, opt):
         dist.reduce(x, 0, op=dist.ReduceOp.SUM)
     return x
 
+def weighted_average(x, count, opt):
+    t_loss = torch.tensor([x * count], device="cuda:"+str(opt.local_rank))
+    t_total = torch.tensor([count], device="cuda:"+str(opt.local_rank))
+    t_loss = sum_master(t_loss, opt)
+    t_total = sum_master(t_total, opt)
+    return (t_loss / t_total).item(), t_total.item()

@@ -7,14 +7,11 @@ import logging
 import data
 import util
 from fidt5 import FiDT5
-from fidbart import BartForConditionalGeneration
 import numpy as np
 import torch.distributed as dist
-from torch.utils.tensorboard import SummaryWriter
 from options import Options
-from torch.utils.data import DataLoader, RandomSampler, DistributedSampler, SequentialSampler
+from torch.utils.data import DataLoader, SequentialSampler
 import evaluation
-import kilt.postprocess as kp
 logger = logging.getLogger(__name__)
 
 def evaluate(model, dataset, dataloader, tokenizer, opt):
@@ -82,15 +79,9 @@ if __name__ == "__main__":
 
     dir_path = os.path.join(opt.checkpoint_dir, opt.name)
 
-    assert opt.model_type == 'bart' or opt.model_type == 't5', 'Expected model type bart or t5'
-    if 'bart' in opt.model_type:
-        model_name = 'facebook/bart-' + opt.model_size
-        model_class = BartForConditionalGeneration
-        tokenizer = transformers.BartTokenizer.from_pretrained(model_name)
-    elif 't5' in opt.model_type:
-        model_name = 't5-' + opt.model_size
-        model_class = FiDT5
-        tokenizer = transformers.T5Tokenizer.from_pretrained(model_name, return_dict=False)
+    model_name = 't5-' + opt.model_size
+    model_class = FiDT5
+    tokenizer = transformers.T5Tokenizer.from_pretrained(model_name, return_dict=False)
 
     collator_function = data.Collator(opt, tokenizer)
     test_examples = data.load_data(opt.test_data_path, global_rank=opt.global_rank, world_size=opt.world_size)
@@ -127,10 +118,5 @@ if __name__ == "__main__":
 
     logger.info("Start eval")
     ems = evaluate(model, test_dataset, test_dataloader, tokenizer, opt)
-
-    if opt.write_test_results and opt.is_master:
-        glob_path = os.path.join(opt.checkpoint_dir, opt.name, 'test_results', '*')
-        kilt_write_path = os.path.join(opt.checkpoint_dir, opt.name, 'output_kilt_format.jsonl')
-        kp.write_kilt_format(glob_path, kilt_write_path) 
 
     logger.info("EM %.6f" % (ems))

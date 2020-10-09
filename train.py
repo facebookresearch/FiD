@@ -12,7 +12,6 @@ from torch.utils.tensorboard import SummaryWriter
 from options import Options
 from torch.utils.data import DataLoader, RandomSampler, DistributedSampler, SequentialSampler
 from fidt5 import FiDT5
-from fidbart import BartForConditionalGeneration
 import evaluation
 import data
 
@@ -49,12 +48,7 @@ def train_evaluate(model, optimizer, scheduler, global_step,
             context_ids, context_mask = context_ids.cuda(), context_mask.cuda()
             context_ids = context_ids.view(context_ids.size(0), -1)
             context_mask = context_mask.view(context_mask.size(0), -1)
-            if 'bart' in opt.model_type:
-                decoder_input_ids = answer_ids[:, :-1]
-                decoder_attention_mask = answer_mask[:, :-1]
-                labels = labels[:, 1:]
-            else:
-                decoder_input_ids = None
+            decoder_input_ids = None
 
 
             model.zero_grad()
@@ -162,15 +156,9 @@ if __name__ == "__main__":
 
     dir_path = os.path.join(opt.checkpoint_dir, opt.name)
 
-    assert opt.model_type == 'bart' or opt.model_type == 't5', 'Expected model type bart or t5'
-    if 'bart' in opt.model_type:
-        model_name = 'facebook/bart-' + opt.model_size
-        model_class = BartForConditionalGeneration
-        tokenizer = transformers.BartTokenizer.from_pretrained(model_name)
-    elif 't5' in opt.model_type:
-        model_name = 't5-' + opt.model_size
-        model_class = FiDT5
-        tokenizer = transformers.T5Tokenizer.from_pretrained(model_name)
+    model_name = 't5-' + opt.model_size
+    model_class = FiDT5
+    tokenizer = transformers.T5Tokenizer.from_pretrained(model_name)
 
     collator_function = data.Collator(opt, tokenizer)
 
@@ -219,16 +207,9 @@ if __name__ == "__main__":
         )
         logger.info("Model loaded from %s" % opt.model_path) 
 
-    
-    if opt.model_type == 'bart':
-        model.model.encoder.n_passages = opt.n_context
-        if opt.use_checkpointing:
-            model.model.encoder.checkpoint = True
-    elif opt.model_type == 't5':
-        if opt.use_checkpointing:
-            model.encoder.checkpoint = True
-        model.encoder.n_passages = opt.n_context
-
+    if opt.use_checkpointing:
+        model.encoder.checkpoint = True
+    model.encoder.n_passages = opt.n_context
 
     if opt.world_size > 1 and opt.local_rank != -1:
         model = torch.nn.parallel.DistributedDataParallel(

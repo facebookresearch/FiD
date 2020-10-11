@@ -61,18 +61,10 @@ def train_evaluate(model, optimizer, scheduler, global_step,
                 'decoder_input_ids':decoder_input_ids,
                 'labels':labels,
             }
-            if opt.mixed_precision:
-                with torch.cuda.amp.autocast():
-                    train_loss = model(**inputs)[0]
-                scaler.scale(train_loss).backward()
-                torch.nn.utils.clip_grad_norm_(model.parameters(), opt.clip*scaler.get_scale())
-                scaler.step(optimizer)
-                scaler.update()
-            else:
-                train_loss = model(**inputs)[0]
-                train_loss.backward()
-                util.clip_gradients(model, opt.clip)
-                optimizer.step()
+            train_loss = model(**inputs)[0]
+            train_loss.backward()
+            util.clip_gradients(model, opt.clip)
+            optimizer.step()
             
             scheduler.step()
 

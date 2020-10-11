@@ -8,7 +8,6 @@ import fairseq
 
 logger = logging.getLogger(__name__)
 
-
 def symlink_force(target, link_name):
     try:
         os.symlink(target, link_name)

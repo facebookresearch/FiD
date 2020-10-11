@@ -15,6 +15,8 @@ from fidt5 import FiDT5
 import evaluation
 import data
 
+logging.getLogger('transformers.tokenization_utils').setLevel(logging.ERROR)
+logging.getLogger('transformers.tokenization_utils_base').setLevel(logging.ERROR)
 logger = logging.getLogger(__name__)
 
 
@@ -52,32 +54,26 @@ def train_evaluate(model, optimizer, scheduler, global_step,
 
 
             model.zero_grad()
-            #outputs = model(
-            #    input_ids=context_ids,
-            #    attention_mask=context_mask,
-            #    decoder_attention_mask=None,
-            #    decoder_input_ids=decoder_input_ids,
-            #    labels=labels,
-            #)
-            with torch.cuda.amp.autocast():
-                outputs = model(
-                    input_ids=context_ids,
-                    attention_mask=context_mask,
-                    decoder_attention_mask=answer_mask,
-                    decoder_input_ids=decoder_input_ids,
-                    labels=labels,
-                )
-            train_loss = outputs[0]
-
-            scaler.scale(train_loss).backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), opt.clip*scaler.get_scale())
-            scaler.step(optimizer)
-            scaler.update()
-
-            #train_loss.backward()
-            #util.clip_gradients(model, opt.clip)
-            #optimizer.step()
-
+            inputs = {
+                'input_ids': context_ids,
+                'attention_mask': context_mask,
+                'decoder_attention_mask':answer_mask,
+                'decoder_input_ids':decoder_input_ids,
+                'labels':labels,
+            }
+            if opt.mixed_precision:
+                with torch.cuda.amp.autocast():
+                    train_loss = model(**inputs)[0]
+                scaler.scale(train_loss).backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), opt.clip*scaler.get_scale())
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                train_loss = model(**inputs)[0]
+                train_loss.backward()
+                util.clip_gradients(model, opt.clip)
+                optimizer.step()
+            
             scheduler.step()
 
             train_loss = util.average_master(train_loss, opt)
@@ -95,15 +91,14 @@ def train_evaluate(model, optimizer, scheduler, global_step,
                 model.train()
             if opt.is_master and global_step % opt.eval_freq == 0:
                 logger.info(
-                    "%d / %d -- train = %.3f | evaluation = %.3f | lr = %.6f"
-                    % (global_step, opt.total_step, curr_loss / (opt.eval_freq), dev_em, scheduler.get_last_lr()[0])
+                    f"{global_step} / {opt.total_step} -- train = {curr_loss/opt.eval_freq:.3f} | evaluation = {100*dev_em:.2f}EM | lr = {scheduler.get_last_lr()[0]:.5f}"
                 )
                 tb_logger.add_scalar("Training", curr_loss / (opt.eval_freq), global_step)
                 curr_loss = 0
 
             if opt.is_master and global_step % (50*opt.eval_freq) == 0:
                 model_to_save = model.module if hasattr(model, "module") else model
-                util.save(model_to_save, optimizer, scheduler, global_step, best_dev_em, opt, dir_path, "step-%s" % global_step)
+                util.save(model_to_save, optimizer, scheduler, global_step, best_dev_em, opt, dir_path, f"step-{global_step}")
             if global_step > opt.total_step:
                 break
 
@@ -117,12 +112,8 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
     with torch.no_grad():
         for i, batch in enumerate(dataloader):
             (idx, answer_ids, answer_mask, context_ids, context_mask) = batch
-            answer_ids, answer_mask = answer_ids.cuda(), answer_mask.bool().cuda()
-            answer_ids.masked_fill_(~answer_mask, -100)
-            context_ids = context_ids.cuda()
-            context_mask = context_mask.cuda()
-            context_ids = context_ids.view(context_ids.size(0), -1)
-            context_mask = context_mask.view(context_mask.size(0), -1)
+            context_ids = context_ids.cuda().view(context_ids.size(0), -1)
+            context_mask = context_mask.cuda().view(context_mask.size(0), -1)
 
             outputs = model.generate(
                 input_ids=context_ids,
@@ -137,7 +128,7 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
                 total+=1
                 ems.append(ems_score)
             if opt.is_master and (i + 1) % opt.eval_print_freq == 0:
-                logger.info("%d / %d -- average = %.3f" % (i + 1, len(dataloader), np.mean(ems)))
+                logger.info(f"{i+1} / {len(dataloader)} -- average = {100*np.mean(ems):.2f}EM")
 
     score, total = util.weighted_average(np.mean(ems), total, opt)
     return score
@@ -207,8 +198,10 @@ if __name__ == "__main__":
         )
         logger.info("Model loaded from %s" % opt.model_path) 
 
-    if opt.use_checkpointing:
+    if opt.checkpointing_encoder:
         model.encoder.checkpoint = True
+    if opt.checkpointing_decoder:
+        model.decoder.checkpoint = True
     model.encoder.n_passages = opt.n_context
 
     if opt.world_size > 1 and opt.local_rank != -1:

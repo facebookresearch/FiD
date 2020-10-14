@@ -50,6 +50,8 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
                 gold = example.answers
                 id = example.id
                 ems_score = evaluation.ems(ans, gold)
+                #if ems_score == 0.:
+                #    print(question, ans, gold)
                 ems.append(ems_score)
 
                 if opt.write_test_results:

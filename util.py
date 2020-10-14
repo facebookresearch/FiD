@@ -4,7 +4,6 @@ import torch
 import sys
 import logging
 import torch.distributed as dist
-import fairseq
 
 logger = logging.getLogger(__name__)
 

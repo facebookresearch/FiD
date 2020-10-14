@@ -41,9 +41,10 @@ class Dataset(torch.utils.data.Dataset):
             c = contexts[i]
             t = titles[i]
             to_concatenate = [self.question_prefix, question]
-            if not self.no_title:
-                to_concatenate += [self.title_prefix, t]
-            to_concatenate += [self.context_prefix, c]
+            if c is not None:
+                if not self.no_title:
+                    to_concatenate += [self.title_prefix, t]
+                to_concatenate += [self.context_prefix, c]
             text = ' '.join(to_concatenate)
             passages.append(text)
 

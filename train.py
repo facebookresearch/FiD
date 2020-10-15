@@ -36,7 +36,6 @@ def train_evaluate(model, optimizer, scheduler, global_step,
 
     loss, curr_loss = 0.0, 0.0
     epoch = 1
-    scaler = torch.cuda.amp.GradScaler()
     model.train()
     while global_step < opt.total_step:
         if opt.world_size > 1:
@@ -47,9 +46,12 @@ def train_evaluate(model, optimizer, scheduler, global_step,
             (idx, answer_ids, answer_mask, context_ids, context_mask) = batch
             answer_ids, answer_mask = answer_ids.cuda(), answer_mask.bool().cuda()
             labels = answer_ids.masked_fill(~answer_mask, -100)
-            context_ids, context_mask = context_ids.cuda(), context_mask.cuda()
-            context_ids = context_ids.view(context_ids.size(0), -1)
-            context_mask = context_mask.view(context_mask.size(0), -1)
+            if hasattr(model, "module"):
+                model.module.encoder.n_passages = context_ids.size(1)
+            else:
+                model.encoder.n_passages = context_ids.size(1)
+            context_ids = context_ids.cuda().view(context_ids.size(0), -1)
+            context_mask = context_mask.cuda().view(context_ids.size(0), -1)
             decoder_input_ids = None
 
 
@@ -104,6 +106,10 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
     with torch.no_grad():
         for i, batch in enumerate(dataloader):
             (idx, answer_ids, answer_mask, context_ids, context_mask) = batch
+            if hasattr(model, "module"):
+                model.module.encoder.n_passages = context_ids.size(1)
+            else:
+                model.encoder.n_passages = context_ids.size(1)
             context_ids = context_ids.cuda().view(context_ids.size(0), -1)
             context_mask = context_mask.cuda().view(context_mask.size(0), -1)
 

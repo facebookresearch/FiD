@@ -30,12 +30,9 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
             (idx, answer_ids,
                 answer_mask, context_ids, context_mask) = batch
             answer_ids, answer_mask = answer_ids.cuda(), answer_mask.bool().cuda()
-            context_ids = [c.cuda()[None] if c is not None else None for c in context_ids]
-            context_mask = [c.bool().cuda()[None] if c is not None else None for c in context_mask]
-            context_ids = torch.cat(context_ids, dim=0)
-            context_mask = torch.cat(context_mask, dim=0)
-            context_ids = context_ids.view(context_ids.size(0), -1)
-            context_mask = context_mask.view(context_mask.size(0), -1)
+            model.encoder.n_passages = context_ids.size(1)
+            context_ids = context_ids.cuda().view(context_ids.size(0), -1)
+            context_mask = context_mask.cuda().view(context_ids.size(0), -1)
 
             outputs = model.generate(
                 input_ids=context_ids,
@@ -50,8 +47,6 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
                 gold = example.answers
                 id = example.id
                 ems_score = evaluation.ems(ans, gold)
-                #if ems_score == 0.:
-                #    print(question, ans, gold)
                 ems.append(ems_score)
 
                 if opt.write_test_results:
@@ -116,7 +111,7 @@ if __name__ == "__main__":
 
     model = model_class.from_pretrained(os.path.join(opt.model_path, 'checkpoint', 'best_dev'))
     model = model.cuda()
-    model.encoder.n_passages = opt.n_context
+    
 
     logger.info("Start eval")
     ems = evaluate(model, test_dataset, test_dataloader, tokenizer, opt)

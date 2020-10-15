@@ -37,7 +37,11 @@ class Dataset(torch.utils.data.Dataset):
         contexts = example.contexts[:self.n_context]
 
         passages = []
-        for i in range(self.n_context):
+        if len(contexts) == 0:
+            to_concatenate = [self.question_prefix, question] 
+            text = ' '.join(to_concatenate)
+            passages.append(text)
+        for i in range(min(self.n_context, len(contexts))):
             c = contexts[i]
             t = titles[i]
             to_concatenate = [self.question_prefix, question]
@@ -109,7 +113,6 @@ class Collator(object):
 def load_data(data_path, global_rank=-1, world_size=-1):
     with open(data_path, "r") as f:
         data = json.load(f)
-
     examples = [] 
     for k, example in enumerate(data):
         if global_rank > -1 and not k%world_size==global_rank:
@@ -124,11 +127,12 @@ def load_data(data_path, global_rank=-1, world_size=-1):
             target = None
         answers = example['answers']
         question = example['question']
-        ctxs = example['ctxs']
         titles, contexts = [], []
-        for i, c in enumerate(ctxs):
-            titles.append(c['title'])
-            contexts.append(c['text'])
+        if 'ctxs' in example:
+            ctxs = example['ctxs']
+            for i, c in enumerate(ctxs):
+                titles.append(c['title'])
+                contexts.append(c['text'])
         ex = QAExample(id=id, question=question, answers=answers, target=target, titles=titles, contexts=contexts)
         examples.append(ex)
     return examples

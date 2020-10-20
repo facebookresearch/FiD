@@ -110,7 +110,12 @@ if __name__ == "__main__":
 
 
     model = model_class.from_pretrained(os.path.join(opt.model_path, 'checkpoint', 'best_dev'))
+    #model = torch.quantization.quantize_dynamic(model, {torch.nn.Linear}, dtype=torch.qint8)
     model = model.cuda()
+    #quantized_dict = torch.load('pretrained_models/nq_large_dpr_int8/checkpoint/best_dev/pytorch_model.bin')
+    #model.load_state_dict(quantized_dict)
+    #model = model.float()
+    #torch.quantization.prepare_qat(model, {torch.nn.Linear}, inplace=True)
     
 
     logger.info("Start eval")

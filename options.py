@@ -17,7 +17,7 @@ class Options():
         parser.add_argument('--test_data_path', type=str, default='none', help='path of test data')
         parser.add_argument('--model_type', type=str, default='t5')
         parser.add_argument('--model_size', type=str, default='base')
-        parser.add_argument('--write_test_results', action='store_true', help='save test results')
+        parser.add_argument('--write_results', action='store_true', help='save test results')
 
         # dataset parameters
         parser.add_argument("--per_gpu_batch_size", default=8, type=int, help="Batch size per GPU/CPU for training.")

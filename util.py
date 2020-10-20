@@ -3,6 +3,7 @@ import errno
 import torch
 import sys
 import logging
+from pathlib import Path
 import torch.distributed as dist
 
 logger = logging.getLogger(__name__)
@@ -178,3 +179,15 @@ def weighted_average(x, count, opt):
     t_loss = sum_master(t_loss, opt)
     t_total = sum_master(t_total, opt)
     return (t_loss / t_total).item(), t_total.item()
+
+def write_output(glob_path, output_path):
+    files = list(glob_path.glob('*.txt'))
+    files.sort()
+    with open(output_path, 'w') as outfile:
+        for path in files:
+            with open(path, 'r') as f:
+                lines = f.readlines()
+                for line in lines:
+                    outfile.write(line)
+            path.unlink()
+    glob_path.rmdir()

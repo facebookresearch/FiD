@@ -8,6 +8,7 @@ import data
 import util
 from fidt5 import FiDT5
 import numpy as np
+from pathlib import Path
 import torch.distributed as dist
 from options import Options
 from torch.utils.data import DataLoader, SequentialSampler
@@ -17,9 +18,6 @@ logger = logging.getLogger(__name__)
 def evaluate(model, dataset, dataloader, tokenizer, opt):
     loss, curr_loss = 0.0, 0.0
     model.eval()
-    if opt.write_test_results:
-        write_path = os.path.join(opt.checkpoint_dir, opt.name, 'test_results')
-        fw = open(os.path.join(write_path, '%d.txt'%opt.global_rank), 'w')
     if hasattr(model, "module"):
         model = model.module
     total = 0
@@ -49,7 +47,9 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
                 ems_score = evaluation.ems(ans, gold)
                 ems.append(ems_score)
 
-                if opt.write_test_results:
+                if opt.write_results:
+                    write_path = os.path.join(opt.checkpoint_dir, opt.name, 'test_results')
+                    fw = open(os.path.join(write_path, '%d.txt'%opt.global_rank), 'a')
                     fw.write(str(id) + "\t" + ans + '\n')
 
                 total += 1
@@ -92,7 +92,7 @@ if __name__ == "__main__":
     if opt.world_size > 1 and not opt.local_rank == -1:
         torch.distributed.barrier()
     os.makedirs(dir_path, exist_ok=True)
-    if opt.write_test_results:
+    if opt.write_results:
         os.makedirs(os.path.join(dir_path, 'test_results'), exist_ok=True)
     if not directory_exists and opt.is_master:
         options.print_options(opt)
@@ -115,5 +115,12 @@ if __name__ == "__main__":
 
     logger.info("Start eval")
     ems = evaluate(model, test_dataset, test_dataloader, tokenizer, opt)
+
+
+    if opt.write_results and opt.is_master:
+        print(opt.is_master)
+        glob_path = Path(opt.checkpoint_dir) / opt.name / 'test_results'
+        write_path = Path(opt.checkpoint_dir) / opt.name / 'final_output.json'
+        util.write_output(glob_path, write_path) 
 
     logger.info("EM %.6f" % (ems))

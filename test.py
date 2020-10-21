@@ -110,13 +110,21 @@ if __name__ == "__main__":
 
 
     model = model_class.from_pretrained(os.path.join(opt.model_path, 'checkpoint', 'best_dev'))
-    #model = torch.quantization.quantize_dynamic(model, {torch.nn.Linear}, dtype=torch.qint8)
-    model = model.cuda()
+
+    #model = model_class.from_pretrained('t5-large')
+    #quantized_model = torch.quantization.quantize_dynamic(model, {torch.nn.Linear}, dtype=torch.qint8)
     #quantized_dict = torch.load('pretrained_models/nq_large_dpr_int8/checkpoint/best_dev/pytorch_model.bin')
-    #model.load_state_dict(quantized_dict)
-    #model = model.float()
-    #torch.quantization.prepare_qat(model, {torch.nn.Linear}, inplace=True)
-    
+    #quantized_model.load_state_dict(quantized_dict)
+    #qm = list(quantized_model.modules())
+    #qml=list(filter(lambda x: type(x) == torch.nn.quantized.dynamic.modules.linear.Linear, qm))
+    #counter = 0
+    #with torch.no_grad():
+    #    for mod in model.modules():
+    #        if type(mod) == torch.nn.Linear:
+    #            mod.weight.copy_(torch.dequantize(qml[counter].weight()))
+    #            counter += 1
+
+    model = model.cuda()
 
     logger.info("Start eval")
     ems = evaluate(model, test_dataset, test_dataloader, tokenizer, opt)

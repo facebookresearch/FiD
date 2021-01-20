@@ -156,12 +156,12 @@ if __name__ == "__main__":
     dev_dataset = reader.data.Dataset(dev_examples, opt.n_context, tokenizer, opt.passage_maxlength, opt.no_title)
 
     directory_exists = os.path.exists(dir_path)
-    if opt.world_size > 1 and not opt.local_rank == -1:
+    if opt.is_distributed:
         torch.distributed.barrier()
     os.makedirs(dir_path, exist_ok=True)
     if not directory_exists and opt.is_main:
         options.print_options(opt)
-    if opt.world_size > 1 and not opt.local_rank == -1:
+    if opt.is_distributed:
         torch.distributed.barrier()
     file_handler = logging.FileHandler(filename=os.path.join(dir_path, "run.log"))
     stdout_handler = logging.StreamHandler(sys.stdout)
@@ -173,7 +173,7 @@ if __name__ == "__main__":
         handlers=handlers,
     )
 
-    if opt.world_size > 1 and not opt.local_rank == -1:
+    if opt.is_distributed:
         torch.distributed.barrier()
 
 

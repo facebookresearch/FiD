@@ -3,12 +3,12 @@ import random
 import json
 
 class Dataset(torch.utils.data.Dataset):
-    def __init__(self, data, n_context, tokenizer, max_passage_length=250, no_title=False, training=False, retriever_mode=False, 
+    def __init__(self, data, n_context, tokenizer, text_maxlength=250, no_title=False, training=False, retriever_mode=False, 
         question_prefix='question:', title_prefix='title:', passage_prefix='context:'):
         self.data = data
         self.n_context = n_context
         self.tokenizer = tokenizer
-        self.max_passage_length = max_passage_length
+        self.text_maxlength = text_maxlength
         self.no_title = no_title
         self.question_prefix = question_prefix
         self.title_prefix = title_prefix
@@ -55,9 +55,9 @@ class Dataset(torch.utils.data.Dataset):
 
 
 class Collator(object):
-    def __init__(self, max_passage_length, tokenizer):
+    def __init__(self, text_maxlength, tokenizer):
         self.tokenizer = tokenizer
-        self.max_passage_length = max_passage_length
+        self.text_maxlength = text_maxlength
 
     def __call__(self, batch):
         index = torch.tensor([ex['index'] for ex in batch])
@@ -79,7 +79,7 @@ class Collator(object):
         max_context_length = 0
         batch_passage_ids, batch_passage_masks = [], []
         for k, text_passages in enumerate(batch_text_passages):
-            p = tokenizer.batch_encode_plus(text_passages, max_length=self.max_passage_length, pad_to_max_length=True, truncation=True, return_tensors='pt')
+            p = tokenizer.batch_encode_plus(text_passages, max_length=self.text_maxlength, pad_to_max_length=True, return_tensors='pt', truncation=True)
             p_ids = p['input_ids']
             p_masks = p['attention_mask']
             batch_passage_ids.append(p_ids[None])

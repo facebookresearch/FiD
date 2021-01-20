@@ -16,6 +16,7 @@ from typing import List, Tuple
 
 import faiss
 import numpy as np
+from tqdm import tqdm
 
 logger = logging.getLogger()
 
@@ -75,27 +76,33 @@ class DenseIndexer(object):
 
 class DenseFlatIndexer(DenseIndexer):
 
-    def __init__(self, vector_sz: int, buffer_size: int = 50000):
+    def __init__(self, vector_sz: int, n_centroids=None, buffer_size: int = 50000):
         super(DenseFlatIndexer, self).__init__(buffer_size=buffer_size)
-        self.index = faiss.IndexFlatIP(vector_sz)
-        #self.index = faiss.index_factory(vector_sz, "SQ8", faiss.METRIC_INNER_PRODUCT)
-        #self.index = faiss.index_factory(vector_sz, "PQ16", faiss.METRIC_INNER_PRODUCT)
-        #self.index = faiss.IndexPQ(vector_sz, 16, 8, faiss.METRIC_INNER_PRODUCT)
-        #self.index = faiss.index_factory(vector_sz, "OPQ64,PQ64x6")
+        if n_centroids is None:
+            self.index = faiss.IndexPQ(vector_sz, n_centroids, 8, faiss.METRIC_INNER_PRODUCT)
+        else:
+            self.index = faiss.IndexFlatIP(vector_sz)
 
     def index_data(self, ids, embeddings):
         # indexing in batches is beneficial for many faiss index types
         self._update_id_mapping(ids)
         if not self.index.is_trained:
-            self.index.train(embeddings.numpy())
-        self.index.add(embeddings.numpy())
+            self.index.train(embeddings)
+        self.index.add(embeddings)
 
         indexed_cnt = len(self.index_id_to_db_id)
         logger.info(f'Total data indexed {indexed_cnt}')
 
-    def search_knn(self, query_vectors: np.array, top_docs: int) -> List[Tuple[List[object], List[float]]]:
-        scores, indexes = self.index.search(query_vectors, top_docs)
-        # convert to external ids
-        db_ids = [[str(self.index_id_to_db_id[i]) for i in query_top_idxs] for query_top_idxs in indexes]
-        result = [(db_ids[i], scores[i]) for i in range(len(db_ids))]
+    def search_knn(self, query_vectors: np.array, top_docs: int, index_batch_size=1024) -> List[Tuple[List[object], List[float]]]:
+        query_vectors = query_vectors.astype('float32')
+        result = []
+        nbatch = (len(query_vectors)-1) // index_batch_size + 1
+        for k in tqdm(range(nbatch)):
+            start_idx = k*index_batch_size
+            end_idx = min((k+1)*index_batch_size, len(query_vectors))
+            q = query_vectors[start_idx: end_idx]
+            scores, indexes = self.index.search(q, top_docs)
+            # convert to external ids
+            db_ids = [[str(self.index_id_to_db_id[i]) for i in query_top_idxs] for query_top_idxs in indexes]
+            result.extend([(db_ids[i], scores[i]) for i in range(len(db_ids))])
         return result

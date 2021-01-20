@@ -46,7 +46,6 @@ def init_distributed_mode(params):
         - world_size
     """
     params.is_slurm_job = 'SLURM_JOB_ID' in os.environ and not 'WORLD_SIZE' in os.environ and not 'SLURM_ARRAY_TASK_ID' in os.environ
-    #print("SLURM job: %s" % str(params.is_slurm_job))
 
     # SLURM job
     if params.is_slurm_job:
@@ -153,6 +152,7 @@ def init_distributed_mode(params):
     else:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     params.device = device
+
 
     # initialize multi-GPU
     if params.is_distributed:

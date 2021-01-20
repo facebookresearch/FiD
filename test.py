@@ -68,7 +68,8 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
 
 if __name__ == "__main__":
     options = Options()
-    options.parser.add_argument('--passage_maxlength', type=int, default=250, help='maximum number of tokens in the question')
+    options.add_reader_options()
+    options.add_eval_options()
     opt = options.parse()
     slurm.init_distributed_mode(opt)
     slurm.init_signal_handler()
@@ -81,9 +82,9 @@ if __name__ == "__main__":
     model_class = FiDT5
     tokenizer = transformers.T5Tokenizer.from_pretrained(model_name, return_dict=False)
 
-    collator_function = reader.data.Collator(opt.passage_maxlength, tokenizer)
+    collator_function = reader.data.Collator(opt.text_maxlength, tokenizer)
     test_examples = reader.data.load_data(opt.eval_data_path, global_rank=opt.global_rank, world_size=opt.world_size)
-    test_dataset = reader.data.Dataset(test_examples, opt.n_context, tokenizer, opt.passage_maxlength, opt.no_title, )
+    test_dataset = reader.data.Dataset(test_examples, opt.n_context, tokenizer, opt.text_maxlength, opt.no_title, )
 
     test_sampler = SequentialSampler(test_dataset) 
     test_dataloader = DataLoader(test_dataset, sampler=test_sampler, batch_size=opt.per_gpu_batch_size,
@@ -109,8 +110,7 @@ if __name__ == "__main__":
         handlers=handlers,
     )
 
-
-    model = model_class.from_pretrained(os.path.join(opt.model_path, 'checkpoint', 'best_dev'))
+    model = model_class.from_pretrained(opt.model_path)
     model = model.cuda()
 
     logger.info("Start eval")

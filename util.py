@@ -38,8 +38,6 @@ def save(model, optimizer, scheduler, step, best_dev_em, opt, dir_path, name):
 
 
 def load(model_class, dir_path, opt, reset_params=False):
-    #epoch_path = os.path.join(dir_path, "checkpoint", name)#str(epoch))
-    #epoch_path = os.path.realpath(epoch_path)
     epoch_path = os.path.realpath(dir_path)
     optimizer_path = os.path.join(epoch_path, "optimizer.pth.tar")
     logger.info("Loading %s" % epoch_path)
@@ -59,15 +57,11 @@ def load(model_class, dir_path, opt, reset_params=False):
     model = model.to(opt.device) 
     return model, optimizer, scheduler, opt_checkpoint, step, best_dev_em
 
-############ OPTIM
-
 
 class WarmupLinearScheduler(torch.optim.lr_scheduler.LambdaLR):
-    def __init__(
-        self, optimizer, warmup_steps, t_total, min_ratio, fixed_lr, last_epoch=-1
-    ):
+    def __init__(self, optimizer, warmup_steps, scheduler_steps, min_ratio, fixed_lr, last_epoch=-1):
         self.warmup_steps = warmup_steps
-        self.t_total = t_total
+        self.scheduler_steps = scheduler_steps
         self.min_ratio = min_ratio
         self.fixed_lr = fixed_lr
         super(WarmupLinearScheduler, self).__init__(
@@ -76,19 +70,15 @@ class WarmupLinearScheduler(torch.optim.lr_scheduler.LambdaLR):
 
     def lr_lambda(self, step):
         if step < self.warmup_steps:
-            return (1 - self.min_ratio) * float(step) / float(
-                max(1, self.warmup_steps)
-            ) + self.min_ratio
+            return (1 - self.min_ratio)*step/float(max(1, self.warmup_steps)) + self.min_ratio
 
         if self.fixed_lr:
             return 1.0
 
-        return max(
-            0.0,
-            1.0
-            + float((self.min_ratio - 1) * (step - self.warmup_steps))
-            / float(max(1.0, self.t_total - self.warmup_steps)),
+        return max(0.0,
+            1.0 + (self.min_ratio - 1) * (step - self.warmup_steps)/float(max(1.0, self.scheduler_steps - self.warmup_steps)),
         )
+
 
 
 class FixedScheduler(torch.optim.lr_scheduler.LambdaLR):
@@ -111,7 +101,11 @@ def set_optim(opt, model):
     if opt.scheduler == 'fixed':
         scheduler = FixedScheduler(optimizer)
     elif opt.scheduler == 'linear':
-        scheduler = WarmupLinearScheduler(optimizer, warmup_steps=600, t_total=15000, min_ratio=0., fixed_lr=False)
+        if opt.scheduler_steps is None:
+            scheduler_steps = opt.total_steps
+        else:
+            scheduler_steps = opt.scheduler_steps
+        scheduler = WarmupLinearScheduler(optimizer, warmup_steps=opt.warmup_steps, scheduler_steps=scheduler_steps, min_ratio=0., fixed_lr=opt.fixed_lr)
     return optimizer, scheduler
 
 

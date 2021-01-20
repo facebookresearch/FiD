@@ -17,7 +17,7 @@ def sig_handler(signum, frame):
         logger.warning("Requeuing job " + os.environ['SLURM_JOB_ID'])
         os.system('scontrol requeue ' + os.environ['SLURM_JOB_ID'])
     else:
-        logger.warning("Not the master process, no need to requeue.")
+        logger.warning("Not the main process, no need to requeue.")
     sys.exit(-1)
 
 
@@ -45,7 +45,7 @@ def init_distributed_mode(params):
         - global_rank
         - world_size
     """
-    params.is_slurm_job = 'SLURM_JOB_ID' in os.environ
+    params.is_slurm_job = 'SLURM_JOB_ID' in os.environ and not 'WORLD_SIZE' in os.environ and not 'SLURM_ARRAY_TASK_ID' in os.environ
     #print("SLURM job: %s" % str(params.is_slurm_job))
 
     # SLURM job
@@ -82,21 +82,23 @@ def init_distributed_mode(params):
 
         # define master address and master port
         hostnames = subprocess.check_output(['scontrol', 'show', 'hostnames', os.environ['SLURM_JOB_NODELIST']])
-        params.master_addr = hostnames.split()[0].decode('utf-8')
-        assert 10001 <= params.master_port <= 20000 or params.world_size == 1
+        params.main_addr = hostnames.split()[0].decode('utf-8')
+        assert 10001 <= params.main_port <= 20000 or params.world_size == 1
         #print(PREFIX + "Master address: %s" % params.master_addr)
         #print(PREFIX + "Master port   : %i" % params.master_port)
 
         # set environment variables for 'env://'
-        os.environ['MASTER_ADDR'] = params.master_addr
-        os.environ['MASTER_PORT'] = str(params.master_port)
+        os.environ['MASTER_ADDR'] = params.main_addr
+        os.environ['MASTER_PORT'] = str(params.main_port)
         os.environ['WORLD_SIZE'] = str(params.world_size)
         os.environ['RANK'] = str(params.global_rank)
+        params.is_distributed = True
+
 
     # multi-GPU job (local or multi-node) - jobs started with torch.distributed.launch
     elif params.local_rank != -1:
 
-        assert params.master_port == -1
+        assert params.main_port == -1
 
         # read environment variables
         params.global_rank = int(os.environ['RANK'])
@@ -106,17 +108,19 @@ def init_distributed_mode(params):
         # number of nodes / node ID
         params.n_nodes = params.world_size // params.n_gpu_per_node
         params.node_id = params.global_rank // params.n_gpu_per_node
+        params.is_distributed = True
 
-    # local job (single GPU)
     else:
         assert params.local_rank == -1
-        assert params.master_port == -1
+        assert params.main_port == -1
+        n_gpu = torch.cuda.device_count()
         params.n_nodes = 1
         params.node_id = 0
         params.local_rank = 0
         params.global_rank = 0
-        params.world_size = 1
-        params.n_gpu_per_node = 1
+        params.world_size = n_gpu
+        params.n_gpu_per_node = n_gpu
+        params.is_distributed = False
 
     # sanity checks
     assert params.n_nodes >= 1
@@ -125,7 +129,7 @@ def init_distributed_mode(params):
     assert params.world_size == params.n_nodes * params.n_gpu_per_node
 
     # define whether this is the master process / if we are in distributed mode
-    params.is_master = params.node_id == 0 and params.local_rank == 0
+    params.is_main = params.node_id == 0 and params.local_rank == 0
     params.multi_node = params.n_nodes > 1
     params.multi_gpu = params.world_size > 1
 
@@ -137,16 +141,21 @@ def init_distributed_mode(params):
     #print(PREFIX + "Global rank    : %i" % params.global_rank)
     #print(PREFIX + "World size     : %i" % params.world_size)
     #print(PREFIX + "GPUs per node  : %i" % params.n_gpu_per_node)
-    #print(PREFIX + "Master         : %s" % str(params.is_master))
+    #print(PREFIX + "Main         : %s" % str(params.is_main))
     #print(PREFIX + "Multi-node     : %s" % str(params.multi_node))
     #print(PREFIX + "Multi-GPU      : %s" % str(params.multi_gpu))
     #print(PREFIX + "Hostname       : %s" % socket.gethostname())
 
     # set GPU device
-    torch.cuda.set_device(params.local_rank)
+    if params.is_distributed:
+        torch.cuda.set_device(params.local_rank)
+        device = torch.device("cuda", params.local_rank)
+    else:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    params.device = device
 
     # initialize multi-GPU
-    if params.multi_gpu:
+    if params.is_distributed:
 
         # http://pytorch.apachecn.org/en/0.3.0/distributed.html#environment-variable-initialization
         # 'env://' will read these environment variables:

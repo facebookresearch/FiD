@@ -3,7 +3,8 @@ import os
 
 
 class Options():
-    def __init__(self):
+    def __init__(self, option_type='reader'):
+        self.option_type = option_type
         parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
         self.parser = self.initialize(parser)
 
@@ -13,35 +14,48 @@ class Options():
         parser.add_argument('--checkpoint_dir', type=str, default='./checkpoint/', help='models are saved here')
         parser.add_argument('--model_path', type=str, default='none', help='path for retraining')
         parser.add_argument('--train_data_path', type=str, default='none', help='path of train data')
-        parser.add_argument('--dev_data_path', type=str, default='none', help='path of dev data')
-        parser.add_argument('--test_data_path', type=str, default='none', help='path of test data')
+        parser.add_argument('--eval_data_path', type=str, default='none', help='path of dev data')
         parser.add_argument('--model_type', type=str, default='t5')
         parser.add_argument('--model_size', type=str, default='base')
         parser.add_argument('--write_results', action='store_true', help='save test results')
+
 
         # dataset parameters
         parser.add_argument("--per_gpu_batch_size", default=8, type=int, help="Batch size per GPU/CPU for training.")
         parser.add_argument('--no_title', action='store_true', help='article titles not included in passages')
         parser.add_argument('--n_context', type=int, default=1)
+        parser.add_argument('--warmup_step', type=int, default=1000)
         parser.add_argument('--total_step', type=int, default=1000)
-        parser.add_argument('--reload_step', type=int, default=-1, help='reload model at step <reload_step>')
-        parser.add_argument('--max_passage_length', type=int, default=250, 
-                            help='maximum number of tokens in the passages (question included)')
+        parser.add_argument('--accumulation_step', type=int, default=1)
+        parser.add_argument('--maxload', type=int, default=-1)
+        #parser.add_argument('--max_passage_length', type=int, default=250, 
+        #                    help='maximum number of tokens in the passages (question included)')
         parser.add_argument('--checkpointing_encoder', action='store_true', help='trades memory for compute')
         parser.add_argument('--checkpointing_decoder', action='store_true', help='trades memory for compute')
 
         parser.add_argument("--local_rank", type=int, default=-1,
                             help="For distributed training: local_rank")
-        parser.add_argument("--master_port", type=int, default=-1,
+        parser.add_argument("--main_port", type=int, default=-1,
                             help="Master port (for multi-node SLURM jobs)")
         parser.add_argument('--seed', type=int, default=0, help="random seed for initialization")
         # training parameters
+        parser.add_argument('--dropout', type=float, default=0.1, help='dropout rate')
         parser.add_argument('--lr', type=float, default=1e-4, help='learning rate')
         parser.add_argument('--clip', type=float, default=1., help='gradient clipping')
+        parser.add_argument('--optim', type=str, default='adam')
+        parser.add_argument('--scheduler', type=str, default='fixed')
+        parser.add_argument('--weight_decay', type=float, default=0.1)
         parser.add_argument('--eval_freq', type=int, default=500, 
                             help='evaluate model every <eval_freq> steps during training')
+        parser.add_argument('--save_freq', type=int, default=5000, 
+                            help='save model every <save_freq> steps during training')
         parser.add_argument('--eval_print_freq', type=int, default=1000, 
                             help='print intermdiate results of evaluation every <eval_print_freq> steps')
+
+        parser.add_argument('--fp16', action='store_true')
+
+        if self.option_type == 'retriever':
+            parser.add_argument('--output_size', type=int, default=768)
                             
         return parser
 

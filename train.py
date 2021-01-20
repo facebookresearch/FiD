@@ -11,9 +11,9 @@ import torch.distributed as dist
 from torch.utils.tensorboard import SummaryWriter
 from options import Options
 from torch.utils.data import DataLoader, RandomSampler, DistributedSampler, SequentialSampler
-from fidt5 import FiDT5
-import evaluation
-import data
+from reader.fidt5 import FiDT5
+import reader.evaluation
+import reader.data
 
 logging.getLogger('transformers.tokenization_utils').setLevel(logging.ERROR)
 logging.getLogger('transformers.tokenization_utils_base').setLevel(logging.ERROR)
@@ -23,16 +23,16 @@ logger = logging.getLogger(__name__)
 def train_evaluate(model, optimizer, scheduler, global_step,
                     train_dataset, dev_dataset, opt, collator_function, best_dev_em):
 
-    if opt.is_master:
+    if opt.is_main:
         tb_logger = SummaryWriter(os.path.join(opt.checkpoint_dir, opt.name))
 
     train_sampler = (RandomSampler(train_dataset) if opt.local_rank == -1 or opt.world_size == 1
         else DistributedSampler(train_dataset))
     dev_sampler = SequentialSampler(dev_dataset)
     train_dataloader = DataLoader(train_dataset, sampler=train_sampler, 
-        batch_size=opt.per_gpu_batch_size, drop_last=True, num_workers=20, collate_fn=collator_function)
+        batch_size=opt.per_gpu_batch_size, drop_last=True, num_workers=10, collate_fn=collator_function)
     dev_dataloader = DataLoader(dev_dataset, sampler=dev_sampler, batch_size=opt.per_gpu_batch_size,
-        drop_last=True, num_workers=20, collate_fn=collator_function)
+        drop_last=True, num_workers=10, collate_fn=collator_function)
 
     loss, curr_loss = 0.0, 0.0
     epoch = 1
@@ -65,7 +65,8 @@ def train_evaluate(model, optimizer, scheduler, global_step,
             }
             train_loss = model(**inputs)[0]
             train_loss.backward()
-            util.clip_gradients(model, opt.clip)
+            #util.clip_gradients(model, opt.clip)
+            torch.nn.utils.clip_grad_norm_(model, opt.clip)
             optimizer.step()
             
             scheduler.step()
@@ -75,22 +76,23 @@ def train_evaluate(model, optimizer, scheduler, global_step,
 
             if global_step % opt.eval_freq == 0:
                 dev_em = evaluate(model, dev_dataset, dev_dataloader, tokenizer, opt)
-                if opt.is_master:
+                if opt.is_main:
                     tb_logger.add_scalar("Evaluation", dev_em, global_step)
                 if dev_em > best_dev_em:
                     best_dev_em = dev_em
-                    if opt.is_master:
+                    if opt.is_main:
                         model_to_save = model.module if hasattr(model, "module") else model
                         util.save(model_to_save, optimizer, scheduler, global_step, best_dev_em, opt, dir_path, 'best_dev')
                 model.train()
-            if opt.is_master and global_step % opt.eval_freq == 0:
+            if opt.is_main and global_step % opt.eval_freq == 0:
                 logger.info(
-                    f"{global_step} / {opt.total_step} -- train = {curr_loss/opt.eval_freq:.3f} | evaluation = {100*dev_em:.2f}EM | lr = {scheduler.get_last_lr()[0]:.5f}"
+                    f"{global_step} / {opt.total_step} -- train = {curr_loss/opt.eval_freq:.3f} \
+                    | evaluation = {100*dev_em:.2f}EM | lr = {scheduler.get_last_lr()[0]:.5f}"
                 )
                 tb_logger.add_scalar("Training", curr_loss / (opt.eval_freq), global_step)
                 curr_loss = 0
 
-            if opt.is_master and global_step % (50*opt.eval_freq) == 0:
+            if opt.is_main and global_step % (50*opt.eval_freq) == 0:
                 model_to_save = model.module if hasattr(model, "module") else model
                 util.save(model_to_save, optimizer, scheduler, global_step, best_dev_em, opt, dir_path, f"step-{global_step}")
             if global_step > opt.total_step:
@@ -99,8 +101,8 @@ def train_evaluate(model, optimizer, scheduler, global_step,
 
 def evaluate(model, dataset, dataloader, tokenizer, opt):
     model.eval()
-    if hasattr(model, "module"):
-        model = model.module
+    #if hasattr(model, "module"):
+    #    model = model.module
     total = 0
     ems = []
     with torch.no_grad():
@@ -113,19 +115,15 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
             context_ids = context_ids.cuda().view(context_ids.size(0), -1)
             context_mask = context_mask.cuda().view(context_mask.size(0), -1)
 
-            outputs = model.generate(
-                input_ids=context_ids,
-                attention_mask=context_mask,
-                max_length=50,
-            )
+            outputs = model.generate(input_ids=context_ids, attention_mask=context_mask, max_length=50)
 
             for k, o in enumerate(outputs):
                 ans = tokenizer.decode(o, skip_special_tokens=True)
-                gold = dataset.get_example(idx[k]).answers
-                ems_score = evaluation.ems(ans, gold)
+                gold = dataset.get_example(idx[k])['answers']
+                ems_score = reader.evaluation.ems(ans, gold)
                 total+=1
                 ems.append(ems_score)
-            if opt.is_master and (i + 1) % opt.eval_print_freq == 0:
+            if opt.is_main and (i + 1) % opt.eval_print_freq == 0:
                 logger.info(f"{i+1} / {len(dataloader)} -- average = {100*np.mean(ems):.2f}EM")
 
     score, total = util.weighted_average(np.mean(ems), total, opt)
@@ -134,6 +132,7 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
 
 if __name__ == "__main__":
     options = Options()
+    options.parser.add_argument('--passage_maxlength', type=int, default=250, help='maximum number of tokens in the question')
     opt = options.parse()
     torch.manual_seed(opt.seed)
     slurm.init_distributed_mode(opt)
@@ -149,18 +148,18 @@ if __name__ == "__main__":
     model_class = FiDT5
     tokenizer = transformers.T5Tokenizer.from_pretrained(model_name)
 
-    collator_function = data.Collator(opt, tokenizer)
+    collator_function = reader.data.Collator(opt, tokenizer)
 
-    train_examples = data.load_data(opt.train_data_path)
-    train_dataset = data.Dataset(train_examples, opt.n_context, tokenizer, opt.max_passage_length, opt.no_title)
-    dev_examples = data.load_data(opt.dev_data_path, global_rank=opt.global_rank, world_size=opt.world_size) #use the global rank and world size attibutes to split the dev set on multiple gpus
-    dev_dataset = data.Dataset(dev_examples, opt.n_context, tokenizer, opt.max_passage_length, opt.no_title)
+    train_examples = reader.data.load_data(opt.train_data_path, maxload=opt.maxload)
+    train_dataset = reader.data.Dataset(train_examples, opt.n_context, tokenizer, opt.passage_maxlength, opt.no_title)
+    dev_examples = reader.data.load_data(opt.eval_data_path, global_rank=opt.global_rank, world_size=opt.world_size, maxload=opt.maxload) #use the global rank and world size attibutes to split the dev set on multiple gpus
+    dev_dataset = reader.data.Dataset(dev_examples, opt.n_context, tokenizer, opt.passage_maxlength, opt.no_title)
 
     directory_exists = os.path.exists(dir_path)
     if opt.world_size > 1 and not opt.local_rank == -1:
         torch.distributed.barrier()
     os.makedirs(dir_path, exist_ok=True)
-    if not directory_exists and opt.is_master:
+    if not directory_exists and opt.is_main:
         options.print_options(opt)
     if opt.world_size > 1 and not opt.local_rank == -1:
         torch.distributed.barrier()
@@ -169,7 +168,7 @@ if __name__ == "__main__":
     handlers = [file_handler, stdout_handler]
     logging.basicConfig(
         datefmt="%m/%d/%Y %H:%M:%S",
-        level=logging.INFO if opt.is_master else logging.WARN,
+        level=logging.INFO if opt.is_main else logging.WARN,
         format="[%(asctime)s] {%(filename)s:%(lineno)d} %(levelname)s - %(message)s",
         handlers=handlers,
     )

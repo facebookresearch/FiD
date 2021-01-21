@@ -55,7 +55,10 @@ class Retriever(PreTrainedModel):
         return outputs 
 
     def embed_passages(self, passage_ids, passage_mask):
-        passage_output = self.model(input_ids=passage_ids, attention_mask=passage_mask if self.apply_mask_passage else None)[0]
+        passage_output = self.model(input_ids=passage_ids, attention_mask=passage_mask if self.apply_mask_passage else None)
+        if not passage_output is tuple:
+            passage_output.to_tuple()
+        passage_output = passage_output[0]
         if not self.config.projection:
             passage_output = self.proj(passage_output)
             passage_output = self.norm(passage_output)
@@ -63,7 +66,10 @@ class Retriever(PreTrainedModel):
         return passage_output
 
     def embed_questions(self, question_ids, question_mask):
-        question_output = self.model(input_ids=question_ids, attention_mask=question_mask if self.apply_mask_question else None)[0]
+        question_output = self.model(input_ids=question_ids, attention_mask=question_mask if self.apply_mask_question else None)
+        if not question_output is tuple:
+            question_output.to_tuple()
+        question_output = question_output[0]
         if not self.config.projection:
             question_output = self.proj(question_output)
             question_output = self.norm(question_output)

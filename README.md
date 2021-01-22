@@ -1,3 +1,8 @@
+This repository contains code for:
+- Fusion-in-Decoder models
+- Distilling Knowledge from Reader to Retriever
+- Memory efficient indexes
+
 ## Dependencies
 
 - Python 3
@@ -5,27 +10,27 @@
 - [PyTorch](http://pytorch.org/) (currently tested on version 1.6.0)
 - [Transformers](http://huggingface.co/transformers/) (version 3.0.2, unlikely to work with a different version)
 
+
+
 # I. Fusion-in-Decoder
 
-### Download data
-
-In what follows we explain how you can train our Fusion-in-Decoder model and download pretrained models.
+In what follows we explain how you can train a Fusion-in-Decoder model, and use pretrained models with your own data.
 
 ### Train
 
-[`train.py`](train.py) provides the code to train a model from scratch. An example usage of the script with some options is given below:
+[`train.py`](train.py) provides the code to train a model from scratch. An example usage of the script is given below:
 
 ```shell
 python train.py \
   --use_checkpoint \
-  --train_data_path $tp \
-  --eval_data_path $dp \
+  --train_data_path <train_data.json> \
+  --eval_data_path <eval_data.json> \
   --model_size base \
   --per_gpu_batch_size 1 \
   --n_context 100 \
   --name my_experiment \
   --checkpoint_dir checkpoint \
-```  
+```
 
 ### Test
 
@@ -33,8 +38,8 @@ python train.py \
 
 ```shell
 python test.py \
-  --model_path my_model_path \
-  --eval_data_path my_test_data.json \
+  --model_path <my_model_path> \
+  --eval_data_path <my_test_data.json> \
   --per_gpu_batch_size 4 \
   --n_context 100 \
   --name my_test \
@@ -72,7 +77,38 @@ Entry example:
 }
 ```
 
-# II. Using cross-attention scores
+# II. Distilling knowledge from reader to retriever for question answering
+This repository also contains code to train a retriever model following the method proposed in our paper: Distilling knowledge from reader to retriever for question answering. The code is heavily inspired by the [https://github.com/facebookresearch/DPR](DPR codebase) and relies on it for the evaluation. The proposed method consists in several steps:
+
+### 1. Obtain reader cross-attention scores
+
+Reader cross-attention scores can be obtain using the option `--write_crossattention_scores` in [`test.py`](test.py). It saves the dataset with cross-attention scores in `checkpoint_dir/name/dataset_wscores.json`.
+
+```shell
+python test.py \
+  --model_path my_model_path \
+  --eval_data_path my_test_data.json \
+  --per_gpu_batch_size 4 \
+  --n_context 100 \
+  --name my_test \
+  --checkpoint_dir checkpoint \
+  --write_crossattention_scores \
+```
+
+### 2. Retriever training
+
+[`train_retriever.py`](train_retriever.py) provides the code to train a retriever using the scores previously generated.
+
+The retriever can be trained using the following command:
+
+
+
+# I. Pretrained models and indexes.
+
+We release pretrained models and indexes. 
+Pretrained reader and retriever can be downloaded here. 
+
+Retriever 
 
 
 ## References

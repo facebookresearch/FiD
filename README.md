@@ -98,6 +98,23 @@ python test.py \
 
 [`train_retriever.py`](train_retriever.py) provides the code to train a retriever using the scores previously generated.
 
+```shell
+python train_retriever.py \
+        --question_maxlength 40 \
+        --passage_maxlength 200 \
+        --dropout 0.1 \
+        --lr 1e-4 \
+        --optim adamw \
+        --scheduler linear \
+        --weight_decay 0.01 \
+        --train_data_path <path> \
+        --eval_data_path <path> \
+        --per_gpu_batch_size 1 \
+        --n_context 100 \
+        --total_steps 20000 \
+        --scheduler_steps 30000 \
+```
+
 
 ### 3. Knowldege source indexing
 
@@ -105,16 +122,38 @@ Then the trained retriever is used to index a knowldege source, Wikipedia in our
 Now that we have trained our retriever, 
 [`retriever/generate_embeddings.py`](retriever/generate_embeddings.py) provides the code to train a retriever using the scores previously generated.
 
+```shell
+python3 generate_retriever_embedding.py \
+        --model_path <model_path> \ #directory
+        --passages_path <passage_path> \ #.tsv file
+        --output_path  \
+        --shard_id 0 \
+        --num_shards 1 \
+        --per_gpu_batch_size 500 \
+```
 
 ### 4. Passage retrieval
 
 After indexing, given an input query, passages can be efficiently retrieved:
+
+
+```shell
+python index_retrieval.py \
+    --model_path <model_path> \
+    --passages_path <passages_path> \
+    --data_path <data_path> \
+    --passages_embeddings_path "wikipedia_embeddings/wiki_*" \
+    --output_path <output_path> \
+    --n-docs 100 \
+```
 
 We found that repeating the four steps here improve performances.
 
 # III. Memory-efficient baselines
 
 The code described in the previous section tends to produce large index, ~60Gb. We apply three simple methods to reduce the memory needed for the total system, namely dimension reduction, vector quantization and passage filtering.
+Reduction of the indexing dimension can be obtained with the option `--indexing_dimension` in the script train_retriever.py.
+Then product quantization can be applied at indexing times by specifying `--n_subquantizers` in index_retrieval.py.
 
 
 

@@ -19,7 +19,7 @@ def symlink_force(target, link_name):
             raise e
 
 
-def save(model, optimizer, scheduler, step, best_dev_em, opt, dir_path, name):
+def save(model, optimizer, scheduler, step, best_eval_metric, opt, dir_path, name):
     path = os.path.join(dir_path, "checkpoint")
     epoch_path = os.path.join(path, name) #"step-%s" % step)
     os.makedirs(epoch_path, exist_ok=True)
@@ -31,7 +31,7 @@ def save(model, optimizer, scheduler, step, best_dev_em, opt, dir_path, name):
         "optimizer": optimizer.state_dict(),
         "scheduler": scheduler.state_dict(),
         "opt": opt,
-        "best_dev_em": best_dev_em,
+        "best_eval_metric": best_eval_metric,
     }
     torch.save(checkpoint, fp)
     symlink_force(epoch_path, cp)
@@ -41,12 +41,12 @@ def load(model_class, dir_path, opt, reset_params=False):
     epoch_path = os.path.realpath(dir_path)
     optimizer_path = os.path.join(epoch_path, "optimizer.pth.tar")
     logger.info("Loading %s" % epoch_path)
-    model = model_class.from_pretrained(epoch_path) #, map_location="cuda:"+str(opt.local_rank))
+    model = model_class.from_pretrained(epoch_path)
     logger.info("loading checkpoint %s" %optimizer_path)
     checkpoint = torch.load(optimizer_path, map_location=opt.device)
     opt_checkpoint = checkpoint["opt"]
     step = checkpoint["step"]
-    best_dev_em = checkpoint["best_dev_em"]
+    best_eval_metric = checkpoint["best_eval_metric"]
     if not reset_params:
         optimizer, scheduler = set_optim(opt_checkpoint, model)
         scheduler.load_state_dict(checkpoint["scheduler"])
@@ -55,7 +55,7 @@ def load(model_class, dir_path, opt, reset_params=False):
         optimizer, scheduler = set_optim(opt, model)
 
     model = model.to(opt.device) 
-    return model, optimizer, scheduler, opt_checkpoint, step, best_dev_em
+    return model, optimizer, scheduler, opt_checkpoint, step, best_eval_metric
 
 
 class WarmupLinearScheduler(torch.optim.lr_scheduler.LambdaLR):

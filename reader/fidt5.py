@@ -29,7 +29,8 @@ from torch.nn import CrossEntropyLoss
 
 from transformers.configuration_t5 import T5Config
 from transformers.file_utils import DUMMY_INPUTS, DUMMY_MASK, add_start_docstrings, add_start_docstrings_to_callable
-from t5blocks import T5LayerNorm, T5DenseReluDense, T5LayerFF, T5Attention, T5LayerSelfAttention, T5LayerCrossAttention 
+#from .t5blocks import T5LayerNorm, T5DenseReluDense, T5LayerFF, T5Attention, T5LayerSelfAttention, T5LayerCrossAttention 
+from transformers.modeling_t5 import T5LayerNorm, T5DenseReluDense, T5LayerFF, T5Attention, T5LayerSelfAttention, T5LayerCrossAttention 
 from transformers.modeling_utils import PreTrainedModel
 
 
@@ -330,33 +331,44 @@ class T5Stack(T5PreTrainedModel):
                 all_hidden_states = all_hidden_states + (hidden_states,)
 
 
-            if not self.is_decoder and self.checkpoint:
-                hidden_states = hidden_states.contiguous()
-                extended_attention_mask = extended_attention_mask.contiguous()
-                layer_outputs = torch.utils.checkpoint.checkpoint(
-                        layer_module,
-                        hidden_states,
-                        extended_attention_mask,
-                        position_bias,
-                        #encoder_hidden_states,
-                        #encoder_extended_attention_mask,
-                        #encoder_decoder_position_bias,
-                        #head_mask[i],
-                        #past_key_value_state,
-                    )
-            else:
-                layer_outputs = layer_module(
-                    hidden_states,
-                    attention_mask=extended_attention_mask,
-                    position_bias=position_bias,
-                    encoder_hidden_states=encoder_hidden_states,
-                    encoder_attention_mask=encoder_extended_attention_mask,
-                    encoder_decoder_position_bias=encoder_decoder_position_bias,
-                    head_mask=head_mask[i],
-                    past_key_value_state=past_key_value_state,
-                    use_cache=use_cache,
-                    output_attentions=output_attentions,
-                )
+            #if not self.is_decoder and self.checkpoint and self.training:
+            #    hidden_states = hidden_states.contiguous()
+            #    extended_attention_mask = extended_attention_mask.contiguous()
+
+            #    kwargs = {
+            #        'encoder_hidden_states': encoder_hidden_states,
+            #        'encoder_attention_mask': encoder_extended_attention_mask,
+            #        'past_key_value_state': past_key_value_state, 
+            #        'output_attentions': output_attentions,
+            #        'head_mask': head_mask[i],
+            #        'use_cache': use_cache,
+            #        'output_attentions': output_attentions,
+            #        'encoder_decoder_position_bias':encoder_decoder_position_bias,
+            #    }
+
+            #    def create_custom_forward(module):
+            #        def custom_forward(*inputs):
+            #            return module(*inputs, **kwargs)
+            #        return custom_forward
+            #    
+            #    #if self.is_decoder:
+            #    #    import pdb
+            #    #    pdb.set_trace()
+            #    kwargs['use_cache'] = False
+            #    layer_outputs = torch.utils.checkpoint.checkpoint(create_custom_forward(layer_module), hidden_states, extended_attention_mask, position_bias)
+            #else:
+            layer_outputs = layer_module(
+                hidden_states,
+                attention_mask=extended_attention_mask,
+                position_bias=position_bias,
+                encoder_hidden_states=encoder_hidden_states,
+                encoder_attention_mask=encoder_extended_attention_mask,
+                encoder_decoder_position_bias=encoder_decoder_position_bias,
+                head_mask=head_mask[i],
+                past_key_value_state=past_key_value_state,
+                use_cache=use_cache,
+                output_attentions=output_attentions,
+            )
             # layer_outputs is a tuple with:
             # hidden-states, key-value-states, (self-attention weights), (self-attention position bias), (cross-attention weights), (cross-attention position bias)
             hidden_states, present_key_value_state = layer_outputs[:2]

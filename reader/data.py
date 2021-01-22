@@ -72,7 +72,7 @@ class Collator(object):
         batch_text_passages = [ex['passages'] for ex in batch]
         batch_passage_ids, batch_passage_masks = self.encode_passages(batch_text_passages, self.tokenizer)
 
-        return (index, target_ids, target_mask, batch_passage_ids, batch_passage_masks)
+        return (index, target_ids, target_mask.bool(), batch_passage_ids, batch_passage_masks.bool())
 
     def encode_passages(self, batch_text_passages, tokenizer):
         batch_encoded_passages = []

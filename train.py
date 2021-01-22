@@ -11,9 +11,11 @@ import torch.distributed as dist
 from torch.utils.tensorboard import SummaryWriter
 from options import Options
 from torch.utils.data import DataLoader, RandomSampler, DistributedSampler, SequentialSampler
-from reader.fidt5 import FiDT5
+#from reader.fidt5 import FiDT5
+from reader.model import EncoderWrapper
 import reader.evaluation
 import reader.data
+import reader.model
 
 logging.getLogger('transformers.tokenization_utils').setLevel(logging.ERROR)
 logging.getLogger('transformers.tokenization_utils_base').setLevel(logging.ERROR)
@@ -45,10 +47,11 @@ def train_evaluate(model, optimizer, scheduler, global_step,
             (idx, answer_ids, answer_mask, context_ids, context_mask) = batch
             answer_ids, answer_mask = answer_ids.cuda(), answer_mask.bool().cuda()
             labels = answer_ids.masked_fill(~answer_mask, -100)
+            n_passages = context_ids.size(1)
             if hasattr(model, "module"):
-                model.module.encoder.n_passages = context_ids.size(1)
+                model.module.encoder.n_passages = n_passages
             else:
-                model.encoder.n_passages = context_ids.size(1)
+                model.encoder.n_passages = n_passages
             context_ids = context_ids.cuda().view(context_ids.size(0), -1)
             context_mask = context_mask.cuda().view(context_ids.size(0), -1)
             decoder_input_ids = None
@@ -101,13 +104,11 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
     model.eval()
     total = 0
     ems = []
+    model = model.module if hasattr(model, "module") else model
     with torch.no_grad():
         for i, batch in enumerate(dataloader):
             (idx, answer_ids, answer_mask, context_ids, context_mask) = batch
-            if hasattr(model, "module"):
-                model.module.encoder.n_passages = context_ids.size(1)
-            else:
-                model.encoder.n_passages = context_ids.size(1)
+            model.encoder.n_passages = context_ids.size(1)
             context_ids = context_ids.cuda().view(context_ids.size(0), -1)
             context_mask = context_mask.cuda().view(context_mask.size(0), -1)
 
@@ -119,8 +120,6 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
                 ems_score = reader.evaluation.ems(ans, gold)
                 total += 1
                 ems.append(ems_score)
-            if opt.is_main and (i + 1) % opt.eval_print_freq == 0:
-                logger.info(f"{i+1} / {len(dataloader)} -- average = {100*np.mean(ems):.2f}EM")
 
     score, total = util.weighted_average(np.mean(ems), total, opt)
     return score
@@ -142,7 +141,7 @@ if __name__ == "__main__":
     dir_path = os.path.join(opt.checkpoint_dir, opt.name)
 
     model_name = 't5-' + opt.model_size
-    model_class = FiDT5
+    model_class = reader.model.FiDT5
     tokenizer = transformers.T5Tokenizer.from_pretrained(model_name)
 
     collator_function = reader.data.Collator(opt.text_maxlength, tokenizer)
@@ -177,7 +176,8 @@ if __name__ == "__main__":
     best_dev_em = 0.
 
     if not directory_exists and opt.model_path == "none":
-        model = model_class.from_pretrained(model_name) 
+        model = reader.model.FiDT5.from_pretrained(model_name)
+        model.wrap_encoder()
         model = model.to(opt.local_rank)
         optimizer, scheduler = util.set_optim(opt, model)
     elif opt.model_path == "none":
@@ -192,11 +192,7 @@ if __name__ == "__main__":
         )
         logger.info("Model loaded from %s" % opt.model_path) 
 
-    if opt.checkpointing_encoder:
-        model.encoder.checkpoint = True
-    if opt.checkpointing_decoder:
-        model.decoder.checkpoint = True
-    model.encoder.n_passages = opt.n_context
+    model.set_checkpoint(opt.use_checkpoint) #reduce memory usage, increase computational cost
 
     if opt.is_distributed:
         model = torch.nn.parallel.DistributedDataParallel(

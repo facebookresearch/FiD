@@ -93,9 +93,8 @@ if __name__ == "__main__":
 
     dir_path = os.path.join(opt.checkpoint_dir, opt.name)
 
-    model_name = 't5-' + opt.model_size
-    model_class = FiDT5
-    tokenizer = transformers.T5Tokenizer.from_pretrained(model_name, return_dict=False)
+    model_class = reader.model.FiDT5
+    tokenizer = transformers.T5Tokenizer.from_pretrained('t5-base', return_dict=False)
 
     collator_function = reader.data.Collator(opt.text_maxlength, tokenizer)
     eval_examples = reader.data.load_data(opt.eval_data_path, global_rank=opt.global_rank, world_size=opt.world_size)
@@ -126,7 +125,7 @@ if __name__ == "__main__":
     )
 
     model = model_class.from_pretrained(opt.model_path)
-    #model.encoder = EncoderWrapper(model.encoder)
+    model.wrap_encoder()
     if opt.write_crossattention_scores:
         reader.model.overwrite_forward_attention(model)
 

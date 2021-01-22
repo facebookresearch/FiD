@@ -1,5 +1,3 @@
-# Fusion-in-Decoder
-
 ## Dependencies
 
 - Python 3
@@ -7,23 +5,26 @@
 - [PyTorch](http://pytorch.org/) (currently tested on version 1.6.0)
 - [Transformers](http://huggingface.co/transformers/) (version 3.0.2, unlikely to work with a different version)
 
+# I. Fusion-in-Decoder
+
 ### Download data
+
+In what follows we explain how you can train our Fusion-in-Decoder model and download pretrained models.
 
 ### Train
 
-[`train.py`](train.py) provides the code for training a model from scratch. An example usage of the script with some options is given below:
+[`train.py`](train.py) provides the code to train a model from scratch. An example usage of the script with some options is given below:
 
 ```shell
 python train.py \
-  --use_checkpointing \
+  --use_checkpoint \
   --train_data_path $tp \
-  --dev_data_path $dp \
+  --eval_data_path $dp \
   --model_size base \
-  --per_gpu_batch_size 4 \
-  --n_context 10 \
+  --per_gpu_batch_size 1 \
+  --n_context 100 \
   --name my_experiment \
   --checkpoint_dir checkpoint \
-  --eval_freq 500
 ```  
 
 ### Test
@@ -33,10 +34,9 @@ python train.py \
 ```shell
 python test.py \
   --model_path my_model_path \
-  --test_data_path my_test_data.json \
-  --model_size base \
+  --eval_data_path my_test_data.json \
   --per_gpu_batch_size 4 \
-  --n_context 10 \
+  --n_context 100 \
   --name my_test \
   --checkpoint_dir checkpoint \
 ```  
@@ -71,3 +71,56 @@ Entry example:
           ]
 }
 ```
+
+# II. Using cross-attention scores
+
+
+## References
+
+[1] G. Izacard, E. Grave [*Leveraging Passage Retrieval with Generative Models for Open Domain Question Answering*](https://arxiv.org/abs/2007.01282)
+
+```
+@misc{izacard2020leveraging,
+      title={Leveraging Passage Retrieval with Generative Models for Open Domain Question Answering}, 
+      author={Gautier Izacard and Edouard Grave},
+      year={2020},
+      eprint={2007.01282},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL}
+}
+```
+
+Distilling Knowledge from Reader to Retriever for Question Answering
+
+[2] G. Izacard, E. Grave [*Distilling Knowledge from Reader to Retriever for Question Answering*](https://arxiv.org/abs/2012.04584)
+
+```
+@misc{izacard2020distilling,
+      title={Distilling Knowledge from Reader to Retriever for Question Answering}, 
+      author={Gautier Izacard and Edouard Grave},
+      year={2020},
+      eprint={2012.04584},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL}
+}
+```
+
+[3] G. Izacard, F. Petroni, L. Hosseini, N. De Cao, S. Riedel, E. Grave [*A Memory Efficient Baseline for Open Domain Question Answering*](https://arxiv.org/abs/2012.15156)
+
+```
+@misc{izacard2020memory,
+      title={A Memory Efficient Baseline for Open Domain Question Answering}, 
+      author={Gautier Izacard and Fabio Petroni and Lucas Hosseini and Nicola De Cao and Sebastian Riedel and Edouard Grave},
+      year={2020},
+      eprint={2012.15156},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL}
+}
+```
+
+## License
+
+See the [LICENSE](LICENSE) file for more details.
+
+
+

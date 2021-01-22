@@ -19,9 +19,11 @@ class Options():
         self.parser.add_argument('--optim', type=str, default='adam')
         self.parser.add_argument('--scheduler', type=str, default='fixed')
         self.parser.add_argument('--weight_decay', type=float, default=0.1)
+        self.parser.add_argument('--fixed_lr', action='store_true')
 
     def add_eval_options(self):
-        self.parser.add_argument('--write_results', action='store_true', help='save test results')
+        self.parser.add_argument('--write_results', action='store_true', help='save results')
+        self.parser.add_argument('--write_crossattention_scores', action='store_true', help='save dataset with cross-attention scores')
 
     def add_reader_options(self):
         self.parser.add_argument('--train_data_path', type=str, default='none', help='path of train data')

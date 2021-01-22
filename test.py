@@ -5,14 +5,17 @@ import transformers
 import slurm
 import logging
 import reader.data
+import reader.model
 import util
 from reader.fidt5 import FiDT5
+from reader.model import EncoderWrapper, newforward
 import numpy as np
 from pathlib import Path
 import torch.distributed as dist
 from options import Options
 from torch.utils.data import DataLoader, SequentialSampler
 import reader.evaluation
+import types
 logger = logging.getLogger(__name__)
 
 def evaluate(model, dataset, dataloader, tokenizer, opt):
@@ -20,6 +23,8 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
     model.eval()
     if hasattr(model, "module"):
         model = model.module
+    if opt.write_crossattention_scores:
+        reader.model.reset_score_storage(model) 
     total = 0
     ems = []
     if opt.write_results:
@@ -30,15 +35,21 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
             (idx, answer_ids,
                 answer_mask, context_ids, context_mask) = batch
             answer_ids, answer_mask = answer_ids.cuda(), answer_mask.bool().cuda()
-            model.encoder.n_passages = context_ids.size(1)
-            context_ids = context_ids.cuda().view(context_ids.size(0), -1)
-            context_mask = context_mask.cuda().view(context_ids.size(0), -1)
+            n_passages = context_ids.size(1) 
+            model.encoder.n_passages = n_passages
+            context_ids = context_ids.cuda()
+            context_mask = context_mask.cuda()
+
+            if opt.write_crossattention_scores:
+                reader.model.reset_score_storage(model)
 
             outputs = model.generate(
-                input_ids=context_ids,
-                attention_mask=context_mask,
+                input_ids=context_ids.view(context_ids.size(0), -1),
+                attention_mask=context_mask.view(context_ids.size(0), -1),
                 max_length=50,
             )
+            if opt.write_crossattention_scores:
+                crossattention_scores = reader.model.get_crossattention_scores(model, context_mask)
 
             for k, o in enumerate(outputs):
                 ans = tokenizer.decode(o, skip_special_tokens=True)
@@ -51,6 +62,10 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
 
                 if opt.write_results:
                     fw.write(str(exid) + "\t" + ans + '\n')
+                if opt.write_crossattention_scores:
+                    ctxs = example['ctxs']
+                    for j in range(n_passages):
+                        ctxs[j]['score'] = crossattention_scores[k, j].item()
 
                 total += 1
             if (i + 1) % opt.eval_print_freq == 0:
@@ -83,11 +98,11 @@ if __name__ == "__main__":
     tokenizer = transformers.T5Tokenizer.from_pretrained(model_name, return_dict=False)
 
     collator_function = reader.data.Collator(opt.text_maxlength, tokenizer)
-    test_examples = reader.data.load_data(opt.eval_data_path, global_rank=opt.global_rank, world_size=opt.world_size)
-    test_dataset = reader.data.Dataset(test_examples, opt.n_context, tokenizer, opt.text_maxlength, opt.no_title, )
+    eval_examples = reader.data.load_data(opt.eval_data_path, global_rank=opt.global_rank, world_size=opt.world_size)
+    eval_dataset = reader.data.Dataset(eval_examples, opt.n_context, tokenizer, opt.text_maxlength, opt.no_title, )
 
-    test_sampler = SequentialSampler(test_dataset) 
-    test_dataloader = DataLoader(test_dataset, sampler=test_sampler, batch_size=opt.per_gpu_batch_size,
+    eval_sampler = SequentialSampler(eval_dataset) 
+    eval_dataloader = DataLoader(eval_dataset, sampler=eval_sampler, batch_size=opt.per_gpu_batch_size,
         shuffle=False, num_workers=20, collate_fn=collator_function)
 
     directory_exists = os.path.exists(dir_path)
@@ -111,10 +126,14 @@ if __name__ == "__main__":
     )
 
     model = model_class.from_pretrained(opt.model_path)
+    #model.encoder = EncoderWrapper(model.encoder)
+    if opt.write_crossattention_scores:
+        reader.model.overwrite_forward_attention(model)
+
     model = model.cuda()
 
     logger.info("Start eval")
-    ems, total = evaluate(model, test_dataset, test_dataloader, tokenizer, opt)
+    ems, total = evaluate(model, eval_dataset, eval_dataloader, tokenizer, opt)
 
     logger.info(f'EM {100*ems:.2f}')
     logger.info(f'Total number of example {total}')
@@ -124,4 +143,6 @@ if __name__ == "__main__":
         glob_path = Path(opt.checkpoint_dir) / opt.name / 'test_results'
         write_path = Path(opt.checkpoint_dir) / opt.name / 'final_output.json'
         util.write_output(glob_path, write_path) 
+    if opt.write_crossattention_scores:
+        util.save_distributed_dataset(data, opt)
 

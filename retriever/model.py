@@ -37,26 +37,25 @@ class Retriever(PreTrainedModel):
             self.norm = nn.LayerNorm(self.config.output_size)
         self.loss_fct = torch.nn.KLDivLoss()
 
-    def score(self, question_ids, question_mask, passage_ids, passage_mask, gold_score=None):
+    def forward(self, question_ids, question_mask, passage_ids, passage_mask, gold_score=None):
         question_output = self.embed_questions(question_ids, question_mask)
         bsz, n_passages, plen = passage_ids.size()
         passage_ids = passage_ids.view(bsz * n_passages, plen)
         passage_mask = passage_mask.view(bsz * n_passages, plen)
         passage_output = self.embed_passages(passage_ids, passage_mask)
-        passage_output = passage_output.view(bsz, n_passages, -1)
 
-        score = torch.einsum('bd,bid->bi', question_output, passage_output)
+        score = torch.einsum('bd,bid->bi', question_output, passage_output.view(bsz, n_passages, -1))
         score = score / np.sqrt(question_output.size(-1))
-        outputs = (score,)
         if gold_score is not None:
             loss = self.kldivloss(score, gold_score)
-            outputs = (loss,) + outputs
+        else:
+            loss = None
 
-        return outputs 
+        return question_output, passage_output, score, loss
 
     def embed_passages(self, passage_ids, passage_mask):
         passage_output = self.model(input_ids=passage_ids, attention_mask=passage_mask if self.apply_mask_passage else None)
-        if not passage_output is tuple:
+        if type(passage_output) is not tuple:
             passage_output.to_tuple()
         passage_output = passage_output[0]
         if not self.config.projection:
@@ -67,7 +66,7 @@ class Retriever(PreTrainedModel):
 
     def embed_questions(self, question_ids, question_mask):
         question_output = self.model(input_ids=question_ids, attention_mask=question_mask if self.apply_mask_question else None)
-        if not question_output is tuple:
+        if type(question_output) is not tuple:
             question_output.to_tuple()
         question_output = question_output[0]
         if not self.config.projection:

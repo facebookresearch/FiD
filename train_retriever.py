@@ -52,14 +52,13 @@ def train_evaluate(model, optimizer, scheduler, global_step,
             gold_score = gold_score.cuda()
             #print(tok.decode(context_ids[0, 0]))
             #print(tok.decode(question_ids[0]))
-            outputs = model.score(
+            _, _, _, train_loss = model(
                 question_ids=question_ids,
                 question_mask=question_mask,
                 passage_ids=context_ids,
                 passage_mask=context_mask,
                 gold_score=gold_score,
             )
-            train_loss = outputs[0]
 
             train_loss.backward()
 
@@ -117,15 +116,13 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
             context_ids, context_mask = context_ids.cuda(), context_mask.cuda()
             gold_score = gold_score.cuda()
 
-            outputs = model.score(
+            _, _, scores, loss = model(
                 question_ids=question_ids,
                 question_mask=question_mask,
                 passage_ids=context_ids,
                 passage_mask=context_mask,
                 gold_score=gold_score,
             )
-            loss = outputs[0]
-            scores = outputs[1]
             for k, s in enumerate(scores):
                 curr_idx = idx[k]
                 has_answer = [dataset.data[curr_idx]['ctxs'][k]['has_answer'] for k in range(opt.n_context)]

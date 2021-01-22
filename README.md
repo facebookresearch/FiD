@@ -81,8 +81,7 @@ Entry example:
 This repository also contains code to train a retriever model following the method proposed in our paper: Distilling knowledge from reader to retriever for question answering. This code is heavily inspired by the [DPR codebase](https://github.com/facebookresearch/DPR) and relies on it for the evaluation. The proposed method consists in several steps:
 
 ### 1. Obtain reader cross-attention scores
-
-Reader cross-attention scores can be obtain using the option `--write_crossattention_scores` in [`test.py`](test.py). It saves the dataset with cross-attention scores in `checkpoint_dir/name/dataset_wscores.json`.
+Assuming that we have already retrieved relevant passages for each question, the first step consists in generating cross-attention scores. This can be done using the option `--write_crossattention_scores` in [`test.py`](test.py). It saves the dataset with cross-attention scores in `checkpoint_dir/name/dataset_wscores.json`. To retrieve the initial set of passages for each question, different options can be considered, such as DPR or BM25.
 
 ```shell
 python test.py \
@@ -99,16 +98,29 @@ python test.py \
 
 [`train_retriever.py`](train_retriever.py) provides the code to train a retriever using the scores previously generated.
 
-The retriever can be trained using the following command:
+
+### 3. Knowldege source indexing
+
+Then the trained retriever is used to index a knowldege source, Wikipedia in our case.
+Now that we have trained our retriever, 
+[`retriever/generate_embeddings.py`](retriever/generate_embeddings.py) provides the code to train a retriever using the scores previously generated.
+
+
+### 4. Passage retrieval
+
+After indexing, given an input query, passages can be efficiently retrieved:
+
+We found that repeating the four steps here improve performances.
+
+# III. Memory-efficient baselines
+
+The code described in the previous section tends to produce large index, ~60Gb. We apply three simple methods to reduce the memory needed for the total system, namely dimension reduction, vector quantization and passage filtering.
 
 
 
-# I. Pretrained models and indexes.
+# VI. Pretrained models and indexes.
 
-We release pretrained models and indexes. 
-Pretrained reader and retriever can be downloaded here. 
-
-Retriever 
+We release pretrained models and indexes.
 
 
 ## References

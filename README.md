@@ -78,7 +78,7 @@ Entry example:
 ```
 
 # II. Distilling knowledge from reader to retriever for question answering
-This repository also contains code to train a retriever model following the method proposed in our paper: Distilling knowledge from reader to retriever for question answering. The code is heavily inspired by the [https://github.com/facebookresearch/DPR](DPR codebase) and relies on it for the evaluation. The proposed method consists in several steps:
+This repository also contains code to train a retriever model following the method proposed in our paper: Distilling knowledge from reader to retriever for question answering. This code is heavily inspired by the [DPR codebase](https://github.com/facebookresearch/DPR) and relies on it for the evaluation. The proposed method consists in several steps:
 
 ### 1. Obtain reader cross-attention scores
 

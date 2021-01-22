@@ -77,9 +77,6 @@ Entry example:
 
 ## References
 
-
-### Leveraging Passage Retrieval with Generative Models for Open Domain Question Answering
-
 [1] G. Izacard, E. Grave [*Leveraging Passage Retrieval with Generative Models for Open Domain Question Answering*](https://arxiv.org/abs/2007.01282)
 
 ```
@@ -95,8 +92,6 @@ Entry example:
 
 Distilling Knowledge from Reader to Retriever for Question Answering
 
-### Distilling Knowledge from Reader to Retriever for Question Answering
-
 [2] G. Izacard, E. Grave [*Distilling Knowledge from Reader to Retriever for Question Answering*](https://arxiv.org/abs/2012.04584)
 
 ```
@@ -109,8 +104,6 @@ Distilling Knowledge from Reader to Retriever for Question Answering
       primaryClass={cs.CL}
 }
 ```
-
-### A Memory Efficient Baseline for Open Domain Question Answerin
 
 [3] G. Izacard, F. Petroni, L. Hosseini, N. De Cao, S. Riedel, E. Grave [*A Memory Efficient Baseline for Open Domain Question Answering*](https://arxiv.org/abs/2012.15156)
 

@@ -177,7 +177,7 @@ if __name__ == "__main__":
 
     if not directory_exists and opt.model_path == "none":
         model = reader.model.FiDT5.from_pretrained(model_name)
-        model.wrap_encoder()
+        model.wrap_encoder(use_checkpoint=opt.use_checkpoint)
         model = model.to(opt.local_rank)
         optimizer, scheduler = util.set_optim(opt, model)
     elif opt.model_path == "none":

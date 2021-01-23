@@ -208,13 +208,12 @@ if __name__ == '__main__':
     parser.add_argument('--output_path', type=str, default=None,
                         help='output .tsv file path to write results to ')
     parser.add_argument('--n-docs', type=int, default=100, help="Amount of top docs to return")
-    parser.add_argument('--validation_workers', type=int, default=16,
+    parser.add_argument('--validation_workers', type=int, default=32,
                         help="Number of parallel processes to validate results")
     parser.add_argument('--per_gpu_batch_size', type=int, default=32, help="Batch size for question encoder forward pass")
     parser.add_argument('--index_batch_size', type=int, default=128, help="Batch size for question encoder forward pass")
     parser.add_argument('--index_buffer', type=int, default=50000,
                         help="Temporal memory data buffer size (in samples) for indexer")
-    parser.add_argument("--index_type", type=str, default='flat', help='Index type')
     parser.add_argument("--n_centroids", type=str, default='flat', help='Number of centroids used for vector quantization with 8 bits per vector')
     parser.add_argument("--save_or_load_index", action='store_true', help='If enabled, save index')
     parser.add_argument("--maxload", type=int, default=None)

@@ -29,9 +29,10 @@ class FiDT5(transformers.T5ForConditionalGeneration):
     def wrap_encoder(self, use_checkpoint=False):
         self.encoder = EncoderWrapper(self.encoder, use_checkpoint=use_checkpoint)
 
-    def set_checkpoint(use_checkpoint):
+    def set_checkpoint(self, use_checkpoint):
         for mod in self.encoder.encoder.block:
-            self.use_checkpoint = self.use_checkpoint
+            mod.use_checkpoint = use_checkpoint
+            mod.module.use_checkpoint = use_checkpoint
 
 class EncoderWrapper(torch.nn.Module):
     def __init__(self, encoder, use_checkpoint=False):
@@ -49,6 +50,20 @@ class EncoderWrapper(torch.nn.Module):
         outputs = (outputs[0].view(bsz, self.n_passages*plen, -1), ) + outputs[1:]
         return outputs 
 
+class FilterWrapper(torch.nn.Module):
+    def __init__(self, mod, use_checkpoint=False):
+        super().__init__()
+        self.mod = mod
+        self.use_heckpoint=use_checkpoint
+    
+    def forward(self, *args, **kwargs):
+        output = self.mod(*args, **kwargs)
+        if self.use_checkpoint and self.training:
+            none_idx = [i for i in range(len(output)) if output[i] is None]
+            output = tuple(x for x in output if x is not None)
+            output = output + (torch.tensor(none_idx, dtype=torch.float, requires_grad=True, device=output[0].device),)
+        return output
+
 class CheckpointWrapper(torch.nn.Module):
     def __init__(self, module, use_checkpoint=False):
         super().__init__()
@@ -58,14 +73,22 @@ class CheckpointWrapper(torch.nn.Module):
     def forward(self, hidden_states, attention_mask, position_bias, **kwargs):
 
         if self.use_checkpoint and self.training:
+            kwargs = {k: v for k, v in kwargs.items() if v is not None}
             def create_custom_forward(module):
                 def custom_forward(*inputs):
                     return module(*inputs, **kwargs)
                 return custom_forward
 
-            outputs = torch.utils.checkpoint.checkpoint(
-                    create_custom_forward(self.module), hidden_states, attention_mask, position_bias
-                )
+            out = torch.utils.checkpoint.checkpoint(create_custom_forward(self.module), hidden_states, attention_mask, position_bias)
+            none_idx = out[-1]
+            outputs = ()
+            counter = 0
+            for k in range(len(out)+len(none_idx)-1):
+                if k in none_idx:
+                    outputs = outputs + (None,)
+                else:
+                    outputs = outputs + (out[counter],)
+                    counter += 1
         else:
             outputs = self.module(hidden_states, attention_mask, position_bias, **kwargs)
         return outputs
@@ -73,7 +96,7 @@ class CheckpointWrapper(torch.nn.Module):
 def apply_checkpoint_wrapper(t5stack, use_checkpoint):
     block = []
     for mod in t5stack.block:
-        wrapped_mod = CheckpointWrapper(mod, use_checkpoint)
+        wrapped_mod = CheckpointWrapper(FilterWrapper(mod, use_checkpoint), use_checkpoint)
         block.append(wrapped_mod)
     block = nn.ModuleList(block)
     t5stack.block = block

@@ -3,6 +3,7 @@ import errno
 import torch
 import sys
 import logging
+import json
 from pathlib import Path
 import torch.distributed as dist
 
@@ -162,12 +163,12 @@ def write_output(glob_path, output_path):
     glob_path.rmdir()
 
 def save_distributed_dataset(data, opt):
-    dir_path = Path(opt.checkpoint) / opt.name
+    dir_path = Path(opt.checkpoint_dir) / opt.name
     write_path = dir_path / 'tmp_dir'
-    write_path.mkdir(exists_ok=True)
+    write_path.mkdir(exist_ok=True)
     tmp_path = write_path / f'{opt.global_rank}.json'
     with open(tmp_path, 'w') as fw:
-        json.dump(data)
+        json.dump(data, fw)
     if opt.is_distributed:
         torch.distributed.barrier()
     if opt.is_main:

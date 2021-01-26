@@ -107,7 +107,7 @@ def apply_checkpoint_wrapper(t5stack, use_checkpoint):
 def overwrite_forward_attention(model):
     for mod in model.decoder.block:
         attn = mod.layer[1].EncDecAttention # = T5AttentionScoreRegistration(mod.layer[1].EncDecAttention)
-        attn.forward = types.MethodType(newforward, attn)
+        attn.forward = types.MethodType(cross_attention_forward, attn)
 
 def get_crossattention_scores(model, context_mask):
     scores = []
@@ -115,10 +115,11 @@ def get_crossattention_scores(model, context_mask):
     for mod in model.decoder.block:
         scores.append(mod.layer[1].EncDecAttention.score_storage)
     scores = torch.cat(scores, dim=2)
-    scores = scores.view(scores.size(0), scores.size(1), scores.size(2), n_passages, -1) #batch_size, n_head, n_layers, n_passages, text_maxlength
+    bsz, n_heads, n_layers, _ = scores.size()
+    scores = scores.view(bsz, n_heads, n_layers, n_passages, -1) #batch_size, n_head, n_layers, n_passages, text_maxlength
     scores = scores.masked_fill(~context_mask[:, None, None], 0.)
     scores = scores.sum(dim=[1, 2, 4])
-    ntokens = context_mask.sum(dim=[2])
+    ntokens = context_mask.sum(dim=[2]) * n_layers * n_heads
     scores = scores/ntokens
     return scores
 
@@ -126,7 +127,7 @@ def reset_score_storage(model):
     for mod in model.decoder.block:
         mod.layer[1].EncDecAttention.score_storage = None
 
-def newforward(
+def cross_attention_forward(
         self,
         input,
         mask=None,
@@ -139,94 +140,51 @@ def newforward(
         output_attentions=False,
     ):
     """
-    Self-attention (if kv is None) or attention over source sentence (provided by kv).
+    This only works for computing cross attention over the input
     """
-    # Input is (bs, qlen, dim)
-    # Mask is (bs, klen) (non-causal) or (bs, klen, klen)
-    # past_key_value_state[0] is (bs, n_heads, q_len - 1, dim_per_head)
-    bs, qlen, dim = input.size()
+    assert(kv != None)
+    assert(head_mask == None)
+    assert(position_bias != None or self.has_relative_attention_bias)
 
-    if past_key_value_state is not None:
-        assert self.is_decoder is True, "Encoder cannot cache past key value states"
-        assert (
-            len(past_key_value_state) == 2
-        ), "past_key_value_state should have 2 past states: keys and values. Got {} past states".format(
-            len(past_key_value_state)
-        )
-        real_qlen = qlen + past_key_value_state[0].shape[2] if query_length is None else query_length
+    bsz, qlen, dim = input.size()
+    n_heads, d_heads = self.n_heads, self.d_kv
+    klen = kv.size(1)
+
+    q = self.q(input).view(bsz, -1, n_heads, d_heads).transpose(1, 2)
+    if past_key_value_state == None:
+        k = self.k(kv).view(bsz, -1, n_heads, d_heads).transpose(1, 2)
+        v = self.v(kv).view(bsz, -1, n_heads, d_heads).transpose(1, 2)
     else:
-        real_qlen = qlen
+        k, v = past_key_value_state
 
-    if kv is None:
-        klen = real_qlen
-    else:
-        klen = kv.size(1)
+    scores = torch.einsum("bnqd,bnkd->bnqk", q, k)
 
-    def shape(x):
-        """  projection """
-        return x.view(bs, -1, self.n_heads, self.d_kv).transpose(1, 2)
-
-    def unshape(x):
-        """  compute context """
-        return x.transpose(1, 2).contiguous().view(bs, -1, self.inner_dim)
-
-    q = shape(self.q(input))  # (bs, n_heads, qlen, dim_per_head)
-
-    if kv is None:
-        k = shape(self.k(input))  # (bs, n_heads, qlen, dim_per_head)
-        v = shape(self.v(input))  # (bs, n_heads, qlen, dim_per_head)
-    elif past_key_value_state is None:
-        k = v = kv
-        k = shape(self.k(k))  # (bs, n_heads, qlen, dim_per_head)
-        v = shape(self.v(v))  # (bs, n_heads, qlen, dim_per_head)
-
-    if past_key_value_state is not None:
-        if kv is None:
-            k_, v_ = past_key_value_state
-            k = torch.cat([k_, k], dim=2)  # (bs, n_heads, klen, dim_per_head)
-            v = torch.cat([v_, v], dim=2)  # (bs, n_heads, klen, dim_per_head)
-        else:
-            k, v = past_key_value_state
-
-    if self.is_decoder and use_cache is True:
-        present_key_value_state = ((k, v),)
-    else:
-        present_key_value_state = (None,)
-
-    scores = torch.einsum("bnqd,bnkd->bnqk", q, k)  # (bs, n_heads, qlen, klen)
+    if mask is not None:
+       scores += mask
 
     if position_bias is None:
-        if not self.has_relative_attention_bias:
-            raise ValueError("No position_bias provided and no weights to compute position_bias")
-        position_bias = self.compute_bias(real_qlen, klen)
-
-        # if key and values are already calculated
-        # we want only the last query position bias
-        if past_key_value_state is not None:
-            position_bias = position_bias[:, :, -1:, :]
-
-        if mask is not None:
-            position_bias = position_bias + mask  # (bs, n_heads, qlen, klen)
-
+        position_bias = self.compute_bias(qlen, klen)
     scores += position_bias
+
     if self.score_storage is None:
         self.score_storage = scores
-    weights = F.softmax(scores.float(), dim=-1).type_as(scores)  # (bs, n_heads, qlen, klen)
-    weights = F.dropout(weights, p=self.dropout, training=self.training)  # (bs, n_heads, qlen, klen)
 
-    # Mask heads if we want to
-    if head_mask is not None:
-        weights = weights * head_mask
+    attn = F.softmax(scores.float(), dim=-1).type_as(scores)
+    attn = F.dropout(attn, p=self.dropout, training=self.training)
 
-    context = torch.matmul(weights, v)  # (bs, n_heads, qlen, dim_per_head)
-    context = unshape(context)  # (bs, qlen, dim)
+    output = torch.matmul(attn, v)
+    output = output.transpose(1, 2).contiguous().view(bsz, -1, self.inner_dim)
+    output = self.o(output)
 
-    context = self.o(context)
-
-    outputs = (context,) + present_key_value_state
+    if use_cache:
+        output = (output,) + ((k, v),)
+    else:
+        output = (output,) + (None,)
 
     if output_attentions:
-        outputs = outputs + (weights,)
+        output = output + (attn,)
+
     if self.has_relative_attention_bias:
-        outputs = outputs + (position_bias,)
-    return outputs
+        output = output + (position_bias,)
+
+    return output

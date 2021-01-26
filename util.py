@@ -183,5 +183,5 @@ def save_distributed_dataset(data, opt):
             alldata.extend(data)
             path.unlink()
         with open(final_path, 'w') as fout:
-            json.dump(alldata, fout)
+            json.dump(alldata, fout, indent=4)
         write_path.rmdir()

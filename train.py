@@ -11,7 +11,6 @@ import torch.distributed as dist
 from torch.utils.tensorboard import SummaryWriter
 from options import Options
 from torch.utils.data import DataLoader, RandomSampler, DistributedSampler, SequentialSampler
-#from reader.fidt5 import FiDT5
 from reader.model import EncoderWrapper
 import reader.evaluation
 import reader.data
@@ -23,17 +22,17 @@ logger = logging.getLogger(__name__)
 
 
 def train_evaluate(model, optimizer, scheduler, global_step,
-                    train_dataset, dev_dataset, opt, collator_function, best_dev_em):
+                    train_dataset, eval_dataset, opt, collator_function, best_dev_em):
 
     if opt.is_main:
         tb_logger = SummaryWriter(os.path.join(opt.checkpoint_dir, opt.name))
 
     train_sampler = DistributedSampler(train_dataset) if opt.is_distributed else RandomSampler(train_dataset) 
-    dev_sampler = SequentialSampler(dev_dataset)
+    eval_sampler = SequentialSampler(eval_dataset)
     train_dataloader = DataLoader(train_dataset, sampler=train_sampler, 
         batch_size=opt.per_gpu_batch_size, drop_last=True, num_workers=10, collate_fn=collator_function)
-    dev_dataloader = DataLoader(dev_dataset, sampler=dev_sampler, batch_size=opt.per_gpu_batch_size,
-        drop_last=True, num_workers=10, collate_fn=collator_function)
+    eval_dataloader = DataLoader(eval_dataset, sampler=eval_sampler, batch_size=opt.per_gpu_batch_size,
+        drop_last=False, num_workers=10, collate_fn=collator_function)
 
     loss, curr_loss = 0.0, 0.0
     epoch = 1
@@ -76,7 +75,7 @@ def train_evaluate(model, optimizer, scheduler, global_step,
             curr_loss += train_loss.item()
 
             if global_step % opt.eval_freq == 0:
-                dev_em = evaluate(model, dev_dataset, dev_dataloader, tokenizer, opt)
+                dev_em = evaluate(model, eval_dataset, eval_dataloader, tokenizer, opt)
                 if opt.is_main:
                     tb_logger.add_scalar("Evaluation", dev_em, global_step)
                 if dev_em > best_dev_em:
@@ -87,8 +86,7 @@ def train_evaluate(model, optimizer, scheduler, global_step,
                 model.train()
             if opt.is_main and global_step % opt.eval_freq == 0:
                 logger.info(
-                    f"{global_step} / {opt.total_steps} -- train = {curr_loss/opt.eval_freq:.3f} \
-                    | evaluation = {100*dev_em:.2f}EM | lr = {scheduler.get_last_lr()[0]:.5f}"
+                    f"{global_step} / {opt.total_steps} | train = {curr_loss/opt.eval_freq:.3f} | evaluation = {100*dev_em:.2f}EM | lr = {scheduler.get_last_lr()[0]:.5f}"
                 )
                 tb_logger.add_scalar("Training", curr_loss / (opt.eval_freq), global_step)
                 curr_loss = 0
@@ -148,8 +146,8 @@ if __name__ == "__main__":
 
     train_examples = reader.data.load_data(opt.train_data_path, maxload=opt.maxload)
     train_dataset = reader.data.Dataset(train_examples, opt.n_context, tokenizer, text_maxlength=opt.text_maxlength, no_title=opt.no_title)
-    dev_examples = reader.data.load_data(opt.eval_data_path, global_rank=opt.global_rank, world_size=opt.world_size, maxload=opt.maxload) #use the global rank and world size attibutes to split the dev set on multiple gpus
-    dev_dataset = reader.data.Dataset(dev_examples, opt.n_context, tokenizer, text_maxlength=opt.text_maxlength, no_title=opt.no_title)
+    eval_examples = reader.data.load_data(opt.eval_data_path, global_rank=opt.global_rank, world_size=opt.world_size, maxload=opt.maxload) #use the global rank and world size attibutes to split the dev set on multiple gpus
+    eval_dataset = reader.data.Dataset(eval_examples, opt.n_context, tokenizer, text_maxlength=opt.text_maxlength, no_title=opt.no_title)
 
     directory_exists = os.path.exists(dir_path)
     if opt.is_distributed:
@@ -176,7 +174,9 @@ if __name__ == "__main__":
     best_dev_em = 0.
 
     if not directory_exists and opt.model_path == "none":
+        t5 = transformers.T5ForConditionalGeneration.from_pretrained('t5-base')
         model = reader.model.FiDT5.from_pretrained(model_name)
+        model.load_state_dict(t5.state_dict())
         model.wrap_encoder(use_checkpoint=opt.use_checkpoint)
         model = model.to(opt.local_rank)
         optimizer, scheduler = util.set_optim(opt, model)
@@ -185,14 +185,15 @@ if __name__ == "__main__":
         model, optimizer, scheduler, opt_checkpoint, global_step, best_dev_em = util.load(
             model_class, load_path, opt, reset_params=False
         )
+        model.wrap_encoder(use_checkpoint=opt.use_checkpoint)
         logger.info(f"Model loaded from {load_path}")
     else:
         model, optimizer, scheduler, opt_checkpoint, global_step, best_dev_em = util.load(
             model_class, opt.model_path, opt, reset_params=True,
         )
+        model.wrap_encoder(use_checkpoint=opt.use_checkpoint)
         logger.info("Model loaded from %s" % opt.model_path) 
 
-    model.set_checkpoint(opt.use_checkpoint) #reduce memory usage, increase computational cost
 
     if opt.is_distributed:
         model = torch.nn.parallel.DistributedDataParallel(
@@ -204,4 +205,4 @@ if __name__ == "__main__":
 
     logger.info("Start training")
     train_evaluate(model, optimizer, scheduler, global_step,
-        train_dataset, dev_dataset, opt, collator_function, best_dev_em)
+        train_dataset, eval_dataset, opt, collator_function, best_dev_em)

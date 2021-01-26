@@ -28,6 +28,9 @@ class Dataset(torch.utils.data.Dataset):
             target = random.choice(example['answers'])
         else:
             target = None
+        
+        if target is not None:
+            target = target + '</s>'
 
         contexts = example['ctxs'][:self.n_context]
 

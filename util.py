@@ -46,7 +46,10 @@ def load(model_class, dir_path, opt, reset_params=False):
     checkpoint = torch.load(optimizer_path, map_location=opt.device)
     opt_checkpoint = checkpoint["opt"]
     step = checkpoint["step"]
-    best_eval_metric = checkpoint["best_eval_metric"]
+    if "best_eval_metric" in checkpoint:
+        best_eval_metric = checkpoint["best_eval_metric"]
+    else:
+        best_eval_metric = checkpoint["best_dev_em"]
     if not reset_params:
         optimizer, scheduler = set_optim(opt_checkpoint, model)
         scheduler.load_state_dict(checkpoint["scheduler"])

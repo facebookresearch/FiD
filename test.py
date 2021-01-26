@@ -7,8 +7,8 @@ import logging
 import reader.data
 import reader.model
 import util
-from reader.fidt5 import FiDT5
 from reader.model import EncoderWrapper, newforward
+from reader.fidt5 import FiDT5
 import numpy as np
 from pathlib import Path
 import torch.distributed as dist
@@ -23,13 +23,13 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
     model.eval()
     if hasattr(model, "module"):
         model = model.module
-    if opt.write_crossattention_scores:
-        reader.model.reset_score_storage(model) 
+    #if opt.write_crossattention_scores:
+    #    reader.model.reset_score_storage(model) 
     total = 0
     ems = []
-    if opt.write_results:
-        write_path = os.path.join(opt.checkpoint_dir, opt.name, 'test_results')
-        fw = open(os.path.join(write_path, '%d.txt'%opt.global_rank), 'a')
+    #if opt.write_results:
+    #    write_path = os.path.join(opt.checkpoint_dir, opt.name, 'test_results')
+    #    fw = open(os.path.join(write_path, '%d.txt'%opt.global_rank), 'a')
     with torch.no_grad():
         for i, batch in enumerate(dataloader):
             (idx, answer_ids,
@@ -40,16 +40,16 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
             context_ids = context_ids.cuda()
             context_mask = context_mask.cuda()
 
-            if opt.write_crossattention_scores:
-                reader.model.reset_score_storage(model)
+            #if opt.write_crossattention_scores:
+            #    reader.model.reset_score_storage(model)
 
             outputs = model.generate(
                 input_ids=context_ids.view(context_ids.size(0), -1),
                 attention_mask=context_mask.view(context_ids.size(0), -1),
                 max_length=50,
             )
-            if opt.write_crossattention_scores:
-                crossattention_scores = reader.model.get_crossattention_scores(model, context_mask)
+            #if opt.write_crossattention_scores:
+            #    crossattention_scores = reader.model.get_crossattention_scores(model, context_mask)
 
             for k, o in enumerate(outputs):
                 ans = tokenizer.decode(o, skip_special_tokens=True)
@@ -60,12 +60,12 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
                 ems_score = reader.evaluation.ems(ans, gold)
                 ems.append(ems_score)
 
-                if opt.write_results:
-                    fw.write(str(exid) + "\t" + ans + '\n')
-                if opt.write_crossattention_scores:
-                    ctxs = example['ctxs']
-                    for j in range(n_passages):
-                        ctxs[j]['score'] = crossattention_scores[k, j].item()
+                #if opt.write_results:
+                #    fw.write(str(exid) + "\t" + ans + '\n')
+                #if opt.write_crossattention_scores:
+                #    ctxs = example['ctxs']
+                #    for j in range(n_passages):
+                #        ctxs[j]['score'] = crossattention_scores[k, j].item()
 
                 total += 1
             if (i + 1) % opt.eval_print_freq == 0:
@@ -93,7 +93,8 @@ if __name__ == "__main__":
 
     dir_path = os.path.join(opt.checkpoint_dir, opt.name)
 
-    model_class = reader.model.FiDT5
+    #model_class = reader.model.FiDT5
+    model_class = FiDT5
     tokenizer = transformers.T5Tokenizer.from_pretrained('t5-base', return_dict=False)
 
     collator_function = reader.data.Collator(opt.text_maxlength, tokenizer)
@@ -125,7 +126,7 @@ if __name__ == "__main__":
     )
 
     model = model_class.from_pretrained(opt.model_path)
-    model.wrap_encoder()
+    #model.wrap_encoder()
     if opt.write_crossattention_scores:
         reader.model.overwrite_forward_attention(model)
 

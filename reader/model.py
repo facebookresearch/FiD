@@ -54,15 +54,20 @@ class FilterWrapper(torch.nn.Module):
     def __init__(self, mod, use_checkpoint=False):
         super().__init__()
         self.mod = mod
-        self.use_heckpoint=use_checkpoint
+        self.use_checkpoint=use_checkpoint
     
     def forward(self, *args, **kwargs):
-        output = self.mod(*args, **kwargs)
+        model_output = self.mod(*args, **kwargs)
+        output = ()
         if self.use_checkpoint and self.training:
-            none_idx = [i for i in range(len(output)) if output[i] is None]
-            output = tuple(x for x in output if x is not None)
-            output = output + (torch.tensor(none_idx, dtype=torch.float, requires_grad=True, device=output[0].device),)
-        return output
+            for x in model_output:
+                if x is None:
+                    output = output + (torch.tensor([], device=model_output[0].device, dtype=torch.float, requires_grad=True),)
+                else:
+                    output = output + (x,)
+            return output
+        else:
+            return model_output
 
 class CheckpointWrapper(torch.nn.Module):
     def __init__(self, module, use_checkpoint=False):
@@ -80,15 +85,12 @@ class CheckpointWrapper(torch.nn.Module):
                 return custom_forward
 
             out = torch.utils.checkpoint.checkpoint(create_custom_forward(self.module), hidden_states, attention_mask, position_bias)
-            none_idx = out[-1]
             outputs = ()
-            counter = 0
-            for k in range(len(out)+len(none_idx)-1):
-                if k in none_idx:
+            for x in out:
+                if len(x.size()) == 0:
                     outputs = outputs + (None,)
                 else:
-                    outputs = outputs + (out[counter],)
-                    counter += 1
+                    outputs = outputs + (x,)
         else:
             outputs = self.module(hidden_states, attention_mask, position_bias, **kwargs)
         return outputs

@@ -5,9 +5,7 @@ import transformers
 import slurm
 import logging
 import reader.data
-import reader.model
 import util
-from reader.model import EncoderWrapper, newforward
 from reader.fidt5 import FiDT5
 import numpy as np
 from pathlib import Path
@@ -24,7 +22,7 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
     if hasattr(model, "module"):
         model = model.module
     if opt.write_crossattention_scores:
-        reader.model.reset_score_storage(model) 
+        model.reset_score_storage() 
     total = 0
     ems = []
     if opt.write_results:
@@ -41,7 +39,7 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
             context_mask = context_mask.cuda()
 
             if opt.write_crossattention_scores:
-                reader.model.reset_score_storage(model)
+                model.reset_score_storage()
 
             outputs = model.generate(
                 input_ids=context_ids.view(context_ids.size(0), -1),
@@ -49,7 +47,7 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
                 max_length=50,
             )
             if opt.write_crossattention_scores:
-                crossattention_scores = reader.model.get_crossattention_scores(model, context_mask)
+                crossattention_scores = model.get_crossattention_scores(context_mask)
 
             for k, o in enumerate(outputs):
                 ans = tokenizer.decode(o, skip_special_tokens=True)
@@ -93,7 +91,7 @@ if __name__ == "__main__":
 
     dir_path = os.path.join(opt.checkpoint_dir, opt.name)
 
-    model_class = reader.model.FiDT5
+    model_class = reader.fidt5.FiDT5
     tokenizer = transformers.T5Tokenizer.from_pretrained('t5-base', return_dict=False)
 
     collator_function = reader.data.Collator(opt.text_maxlength, tokenizer)
@@ -127,7 +125,7 @@ if __name__ == "__main__":
     model = model_class.from_pretrained(opt.model_path)
     model.wrap_encoder()
     if opt.write_crossattention_scores:
-        reader.model.overwrite_forward_attention(model)
+        model.overwrite_forward_crossattention()
 
     model = model.cuda()
 

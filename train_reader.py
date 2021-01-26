@@ -14,7 +14,7 @@ from torch.utils.data import DataLoader, RandomSampler, DistributedSampler, Sequ
 from reader.model import EncoderWrapper
 import reader.evaluation
 import reader.data
-import reader.model
+import reader.fidt5
 
 logging.getLogger('transformers.tokenization_utils').setLevel(logging.ERROR)
 logging.getLogger('transformers.tokenization_utils_base').setLevel(logging.ERROR)
@@ -139,7 +139,7 @@ if __name__ == "__main__":
     dir_path = os.path.join(opt.checkpoint_dir, opt.name)
 
     model_name = 't5-' + opt.model_size
-    model_class = reader.model.FiDT5
+    model_class = reader.fidt5.FiDT5
     tokenizer = transformers.T5Tokenizer.from_pretrained(model_name)
 
     collator_function = reader.data.Collator(opt.text_maxlength, tokenizer)

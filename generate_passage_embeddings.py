@@ -19,7 +19,6 @@ import pickle
 
 import numpy as np
 import torch
-from torch import nn
 
 import transformers
 import retriever.data
@@ -48,7 +47,7 @@ def embed_passages(opt, passages, model, tokenizer):
     with torch.no_grad():
         for k, (ids, text_ids, text_mask) in enumerate(dataloader):
             text_ids, text_mask = text_ids.cuda(), text_mask.cuda()
-            embeddings = model.embed_passages(passage_ids=text_ids, passage_mask=text_mask)
+            embeddings = model.embed_text(text_ids=text_ids, text_mask=text_mask, apply_mask=model.apply_passage_mask)
             embeddings = embeddings.cpu()
             total += len(ids)
 

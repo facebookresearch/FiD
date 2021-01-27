@@ -13,7 +13,6 @@ import sys
 import logging
 import pickle
 import time
-from tqdm import tqdm
 
 import numpy as np
 import torch
@@ -41,9 +40,12 @@ def embed_questions(opt, data, model, tokenizer):
     embedding = []
     with torch.no_grad():
         for k, batch in enumerate(dataloader):
-            (idx, question_ids, question_mask, context_ids, context_mask, gold_score) = batch
-            question_ids, question_mask = question_ids.to(opt.device), question_mask.to(opt.device)
-            output = model.embed_questions(question_ids=question_ids, question_mask=question_mask)
+            (idx, question_ids, question_mask, _, _, _) = batch
+            output = model.embed_text(
+                text_ids=question_ids.to(opt.device), 
+                text_mask=question_mask.to(opt.device), 
+                apply_mask=model.apply_question_mask.to(opt.device)
+                )
             embedding.append(output)
 
     embedding = torch.cat(embedding, dim=0)

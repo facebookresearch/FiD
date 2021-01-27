@@ -47,17 +47,14 @@ def train_evaluate(model, optimizer, scheduler, global_step,
         for i, batch in enumerate(train_dataloader):
             global_step += 1
             (idx, question_ids, question_mask, context_ids, context_mask, gold_score) = batch
-            question_ids, question_mask = question_ids.cuda(), question_mask.cuda()
-            context_ids, context_mask = context_ids.cuda(), context_mask.cuda()
-            gold_score = gold_score.cuda()
             #print(tok.decode(context_ids[0, 0]))
             #print(tok.decode(question_ids[0]))
             _, _, _, train_loss = model(
-                question_ids=question_ids,
-                question_mask=question_mask,
-                passage_ids=context_ids,
-                passage_mask=context_mask,
-                gold_score=gold_score,
+                question_ids=question_ids.cuda(),
+                question_mask=question_mask.cuda(),
+                passage_ids=context_ids.cuda(),
+                passage_mask=context_mask.cuda(),
+                gold_score=gold_score.cuda(),
             )
 
             train_loss.backward()
@@ -81,13 +78,13 @@ def train_evaluate(model, optimizer, scheduler, global_step,
                         model_to_save = model.module if hasattr(model, "module") else model
                         util.save(model_to_save, optimizer, scheduler, global_step, best_eval_loss, opt, dir_path, 'best_dev')
                 model.train()
-            if opt.is_main and global_step % opt.eval_freq == 0:
-                message = f"{global_step} / {opt.total_steps} -- train: {curr_loss/opt.eval_freq:.6f}, eval: {eval_loss:.6f}, inv: {inversions:.1f}, lr: {scheduler.get_last_lr()[0]:.6f}"
-                for k in top_metric:
-                    message += f"| top{k}: {100*top_metric[k]:.1f} | avg{k}: {avg_metric[k]:.1f}"
-                logger.info(message)
-                tb_logger.add_scalar("Training", curr_loss / (opt.eval_freq), global_step)
-                curr_loss = 0
+                if opt.is_main:
+                    message = f"{global_step} / {opt.total_steps} -- train: {curr_loss/opt.eval_freq:.6f}, eval: {eval_loss:.6f}, inv: {inversions:.1f}, lr: {scheduler.get_last_lr()[0]:.6f}"
+                    for k in top_metric:
+                        message += f"| top{k}: {100*top_metric[k]:.1f} | avg{k}: {avg_metric[k]:.1f}"
+                    logger.info(message)
+                    tb_logger.add_scalar("Training", curr_loss / (opt.eval_freq), global_step)
+                    curr_loss = 0
 
             if opt.is_main and global_step % opt.save_freq == 0:
                 model_to_save = model.module if hasattr(model, "module") else model
@@ -112,16 +109,13 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
     with torch.no_grad():
         for i, batch in enumerate(dataloader):
             (idx, question_ids, question_mask, context_ids, context_mask, gold_score) = batch
-            question_ids, question_mask = question_ids.cuda(), question_mask.cuda()
-            context_ids, context_mask = context_ids.cuda(), context_mask.cuda()
-            gold_score = gold_score.cuda()
 
             _, _, scores, loss = model(
-                question_ids=question_ids,
-                question_mask=question_mask,
-                passage_ids=context_ids,
-                passage_mask=context_mask,
-                gold_score=gold_score,
+                question_ids=question_ids.cuda(),
+                question_mask=question_mask.cuda(),
+                passage_ids=context_ids.cuda(),
+                passage_mask=context_mask.cuda(),
+                gold_score=gold_score.cuda(),
             )
             for k, s in enumerate(scores):
                 curr_idx = idx[k]

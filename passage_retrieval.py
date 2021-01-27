@@ -5,16 +5,10 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-"""
- Command line tool to get dense results and validate them
-"""
-
 import argparse
 import os
 import csv
-import glob
 import json
-import gzip
 import sys
 import logging
 import pickle
@@ -23,8 +17,6 @@ from tqdm import tqdm
 
 import numpy as np
 import torch
-from torch import Tensor as T
-from torch import nn
 import transformers
 
 import slurm
@@ -38,14 +30,7 @@ from torch.utils.data import DataLoader
 
 from retriever.qa_validation import calculate_matches
 
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
-if (logger.hasHandlers()):
-    logger.handlers.clear()
-console = logging.StreamHandler()
-logger.addHandler(console)
-
-tok = transformers.BertTokenizer.from_pretrained('bert-base-uncased')
+logger = logging.getLogger(__name__)
 
 def embed_questions(opt, data, model, tokenizer):
     batch_size = opt.per_gpu_batch_size * opt.world_size

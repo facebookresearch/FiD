@@ -15,13 +15,9 @@ import retriever.evaluation
 import retriever.data
 import retriever.model
 
-logging.getLogger('transformers.tokenization_utils').setLevel(logging.ERROR)
-logging.getLogger('transformers.tokenization_utils_base').setLevel(logging.ERROR)
 logger = logging.getLogger(__name__)
 
-
 tok = transformers.BertTokenizer.from_pretrained('bert-base-uncased')
-
 
 def train_evaluate(model, optimizer, scheduler, global_step,
                     train_dataset, dev_dataset, opt, collator_function, best_eval_loss):
@@ -29,11 +25,9 @@ def train_evaluate(model, optimizer, scheduler, global_step,
     if opt.is_main:
         tb_logger = SummaryWriter(os.path.join(opt.checkpoint_dir, opt.name))
     train_sampler = DistributedSampler(train_dataset) if opt.is_distributed else RandomSampler(train_dataset)
-    dev_sampler = SequentialSampler(dev_dataset)
     train_dataloader = DataLoader(train_dataset, sampler=train_sampler, batch_size=opt.per_gpu_batch_size, 
         drop_last=True, num_workers=10, collate_fn=collator_function)
-    dev_dataloader = DataLoader(dev_dataset, sampler=dev_sampler, batch_size=opt.per_gpu_batch_size,
-        drop_last=False, num_workers=10, collate_fn=collator_function)
+
 
 
     loss, curr_loss = 0.0, 0.0
@@ -95,7 +89,16 @@ def train_evaluate(model, optimizer, scheduler, global_step,
                 break
 
 
-def evaluate(model, dataset, dataloader, tokenizer, opt):
+def evaluate(model, dataset, dataset, tokenizer, opt):
+    sampler = SequentialSampler(dataset)
+    dataloader = DataLoader(
+        dev_dataset, 
+        sampler=sampler, 
+        batch_size=opt.per_gpu_batch_size,
+        drop_last=False, 
+        num_workers=10, 
+        collate_fn=collator
+    )
     model.eval()
     if hasattr(model, "module"):
         model = model.module
@@ -154,8 +157,6 @@ if __name__ == "__main__":
     opt.train_batch_size = opt.per_gpu_batch_size * max(1, opt.world_size)
     logger.info("Distributed training")
 
-    logging.getLogger("transformers.tokenization_utils").setLevel(logging.ERROR)
-
     dir_path = os.path.join(opt.checkpoint_dir, opt.name)
 
     tokenizer = transformers.BertTokenizerFast.from_pretrained('bert-base-uncased')
@@ -175,20 +176,7 @@ if __name__ == "__main__":
     os.makedirs(dir_path, exist_ok=True)
     if not directory_exists and opt.is_main:
         options.print_options(opt)
-    if opt.is_distributed:
-        torch.distributed.barrier()
-    file_handler = logging.FileHandler(filename=os.path.join(dir_path, "run.log"))
-    stdout_handler = logging.StreamHandler(sys.stdout)
-    handlers = [file_handler, stdout_handler]
-    logging.basicConfig(
-        datefmt="%m/%d/%Y %H:%M:%S",
-        level=logging.INFO if opt.is_main else logging.WARN,
-        format="[%(asctime)s] {%(filename)s:%(lineno)d} %(levelname)s - %(message)s",
-        handlers=handlers,
-    )
-
-    if opt.is_distributed > 1:
-        torch.distributed.barrier()
+    util.init_logger(opt)
 
     global_step = 0
     best_eval_loss = np.inf
@@ -200,11 +188,15 @@ if __name__ == "__main__":
         model = model.to(opt.device)
         optimizer, scheduler = util.set_optim(opt, model)
     elif opt.model_path == "none":
-        model, optimizer, scheduler, opt_checkpoint, global_step, best_eval_loss = util.load(model_class, os.path.join(dir_path, 'checkpoint', 'latest'), opt, reset_params=False)
-        logger.info("Model loaded from %s" % dir_path)
+        model, optimizer, scheduler, opt_checkpoint, global_step, best_eval_loss = util.load(
+            model_class, os.path.join(dir_path, 'checkpoint', 'latest'), opt, reset_params=False
+        )
+        logger.info(f"Model loaded from {dir_path}")
     else:
-        model, optimizer, scheduler, opt_checkpoint, global_step, best_eval_loss = util.load(model_class, opt.model_path, opt, reset_params=True)
-        logger.info("Model loaded from %s" % opt.model_path)
+        model, optimizer, scheduler, opt_checkpoint, global_step, best_eval_loss = util.load(
+            model_class, opt.model_path, opt, reset_params=True
+        )
+        logger.info(f"Model loaded from {opt.model_path}")
 
 
     if opt.is_distributed:
@@ -212,5 +204,14 @@ if __name__ == "__main__":
             model, device_ids=[opt.local_rank], output_device=opt.local_rank, find_unused_parameters=True,
         )
     
-    train_evaluate(model, optimizer, scheduler, global_step,
-        train_dataset, eval_dataset, opt, collator_function, best_eval_loss)
+    train_evaluate(
+        model, 
+        optimizer,
+        scheduler,
+        global_step,
+        train_dataset,
+        eval_dataset,
+        opt,
+        collator_function,
+        best_eval_loss
+    )

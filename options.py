@@ -27,8 +27,8 @@ class Options():
         self.parser.add_argument('--write_crossattention_scores', action='store_true', help='save dataset with cross-attention scores')
 
     def add_reader_options(self):
-        self.parser.add_argument('--train_data_path', type=str, default='none', help='path of train data')
-        self.parser.add_argument('--eval_data_path', type=str, default='none', help='path of eval data')
+        self.parser.add_argument('--train_data', type=str, default='none', help='path of train data')
+        self.parser.add_argument('--eval_data', type=str, default='none', help='path of eval data')
         self.parser.add_argument('--model_size', type=str, default='base')
         self.parser.add_argument('--use_checkpoint', action='store_true', help='use checkpoint in the encoder')
         self.parser.add_argument('--text_maxlength', type=int, default=200, help='maximum number of tokens in text segments (question+passage)')
@@ -36,8 +36,8 @@ class Options():
         self.parser.add_argument('--n_context', type=int, default=1)
 
     def add_retriever_options(self):
-        self.parser.add_argument('--train_data_path', type=str, default='none', help='path of train data')
-        self.parser.add_argument('--eval_data_path', type=str, default='none', help='path of eval data')
+        self.parser.add_argument('--train_data', type=str, default='none', help='path of train data')
+        self.parser.add_argument('--eval_data', type=str, default='none', help='path of eval data')
         self.parser.add_argument('--indexing_dimension', type=int, default=768)
         self.parser.add_argument('--no_projection', action='store_true', help='No addition Linear layer and layernorm, only works if indexing size equals 768')
         self.parser.add_argument('--question_maxlength', type=int, default=40, help='maximum number of tokens in questions')

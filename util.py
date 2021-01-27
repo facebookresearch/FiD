@@ -41,7 +41,7 @@ def save(model, optimizer, scheduler, step, best_eval_metric, opt, dir_path, nam
     path = os.path.join(dir_path, "checkpoint")
     epoch_path = os.path.join(path, name) #"step-%s" % step)
     os.makedirs(epoch_path, exist_ok=True)
-    model.save_pretrained(epoch_path)
+    model_to_save.save_pretrained(epoch_path)
     cp = os.path.join(path, "latest")
     fp = os.path.join(epoch_path, "optimizer.pth.tar")
     checkpoint = {

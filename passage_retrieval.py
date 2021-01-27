@@ -45,7 +45,7 @@ def embed_questions(opt, data, model, tokenizer):
                 text_ids=question_ids.to(opt.device), 
                 text_mask=question_mask.to(opt.device), 
                 apply_mask=model.apply_question_mask.to(opt.device)
-                )
+            )
             embedding.append(output)
 
     embedding = torch.cat(embedding, dim=0)

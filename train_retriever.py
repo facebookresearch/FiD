@@ -75,20 +75,22 @@ def train_evaluate(model, optimizer, scheduler, global_step,
                 if eval_loss < best_eval_loss:
                     best_eval_loss = eval_loss
                     if opt.is_main:
-                        model_to_save = model.module if hasattr(model, "module") else model
-                        util.save(model_to_save, optimizer, scheduler, global_step, best_eval_loss, opt, dir_path, 'best_dev')
+                        util.save(model, optimizer, scheduler, global_step, best_eval_loss, opt, dir_path, 'best_dev')
                 model.train()
                 if opt.is_main:
-                    message = f"{global_step} / {opt.total_steps} -- train: {curr_loss/opt.eval_freq:.6f}, eval: {eval_loss:.6f}, inv: {inversions:.1f}, lr: {scheduler.get_last_lr()[0]:.6f}"
+                    log = f"{global_step} / {opt.total_steps}"
+                    log += f" -- train: {curr_loss/opt.eval_freq:.6f}"
+                    log += f", eval: {eval_loss:.6f}"
+                    log += f", inv: {inversions:.1f}"
+                    log += f", lr: {scheduler.get_last_lr()[0]:.6f}"
                     for k in top_metric:
-                        message += f"| top{k}: {100*top_metric[k]:.1f} | avg{k}: {avg_metric[k]:.1f}"
-                    logger.info(message)
+                        log += f"| top{k}: {100*top_metric[k]:.1f} | avg{k}: {avg_metric[k]:.1f}"
+                    logger.info(log)
                     tb_logger.add_scalar("Training", curr_loss / (opt.eval_freq), global_step)
                     curr_loss = 0
 
             if opt.is_main and global_step % opt.save_freq == 0:
-                model_to_save = model.module if hasattr(model, "module") else model
-                util.save(model_to_save, optimizer, scheduler, global_step, best_eval_loss, opt, dir_path, f"step-{global_step}")
+                util.save(model, optimizer, scheduler, global_step, best_eval_loss, opt, dir_path, f"step-{global_step}")
             if global_step > opt.total_steps:
                 break
 

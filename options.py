@@ -1,5 +1,6 @@
 import argparse
 import os
+from pathlib import Path
 
 
 class Options():
@@ -83,7 +84,7 @@ class Options():
         expr_dir = os.path.join(opt.checkpoint_dir, opt.name)
         model_dir = os.path.join(expr_dir, 'models')
         if not os.path.exists(model_dir):
-            os.makedirs(os.path.join(expr_dir, 'models'))
+            os.makedirs(os.path.join(expr_dir, 'models'), exist_ok=True)
         file_name = os.path.join(expr_dir, 'opt.txt')
         with open(file_name, 'wt') as opt_file:
             opt_file.write(message)

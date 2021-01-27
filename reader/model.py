@@ -117,17 +117,6 @@ class CheckpointWrapper(torch.nn.Module):
         else:
             outputs = self.module(hidden_states, attention_mask, position_bias, **kwargs)
         return outputs
-    
-def apply_checkpoint_wrapper(t5stack, use_checkpoint):
-    block = []
-    for mod in t5stack.block:
-        wrapped_mod = CheckpointWrapper(FilterWrapper(mod, use_checkpoint), use_checkpoint)
-        block.append(wrapped_mod)
-    block = nn.ModuleList(block)
-    t5stack.block = block
-
-
-
 
 
 def cross_attention_forward(
@@ -191,3 +180,12 @@ def cross_attention_forward(
         output = output + (position_bias,)
 
     return output
+
+
+def apply_checkpoint_wrapper(t5stack, use_checkpoint):
+    block = []
+    for mod in t5stack.block:
+        wrapped_mod = CheckpointWrapper(FilterWrapper(mod, use_checkpoint), use_checkpoint)
+        block.append(wrapped_mod)
+    block = nn.ModuleList(block)
+    t5stack.block = block

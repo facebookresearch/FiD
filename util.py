@@ -9,6 +9,22 @@ import torch.distributed as dist
 
 logger = logging.getLogger(__name__)
 
+def init_logger(opt):
+    if opt.is_distributed: 
+        torch.distributed.barrier() #
+    file_handler = logging.FileHandler(filename=Path(opt.checkpoint_dir) / opt.name / 'run.log')
+    stdout_handler = logging.StreamHandler(sys.stdout)
+    handlers = [file_handler, stdout_handler]
+    logging.basicConfig(
+        datefmt="%m/%d/%Y %H:%M:%S",
+        level=logging.INFO if opt.is_main else logging.WARN,
+        format="[%(asctime)s] {%(filename)s:%(lineno)d} %(levelname)s - %(message)s",
+        handlers=handlers,
+    )
+    logging.getLogger('transformers.tokenization_utils').setLevel(logging.ERROR)
+    logging.getLogger('transformers.tokenization_utils_base').setLevel(logging.ERROR)
+    return logger
+
 def symlink_force(target, link_name):
     try:
         os.symlink(target, link_name)
@@ -21,6 +37,7 @@ def symlink_force(target, link_name):
 
 
 def save(model, optimizer, scheduler, step, best_eval_metric, opt, dir_path, name):
+    model_to_save = model.module if hasattr(model, "module") else model
     path = os.path.join(dir_path, "checkpoint")
     epoch_path = os.path.join(path, name) #"step-%s" % step)
     os.makedirs(epoch_path, exist_ok=True)

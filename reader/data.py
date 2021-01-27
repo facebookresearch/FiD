@@ -93,41 +93,6 @@ class Collator(object):
         return batch_passage_ids, batch_passage_masks
 
 
-class RetrieverCollator(object):
-    def __init__(self, tokenizer, passage_maxlength):
-        self.tokenizer = tokenizer
-        self.passage_maxlength = passage_maxlength
-        self.question_maxlength = question_maxlength
-
-    def __call__(self, batch):
-        index = torch.tensor([ex['index'] for ex in batch])
-        question = [ex['question'] for ex in batch]
-        question = self.tokenizer.batch_encode_plus(question, pad_to_max_length=True, return_tensors="pt", max_length=40, truncation=True)
-        question_ids, question_mask = question['input_ids'], question['attention_mask']
-        question_mask = question_mask.bool()
-        scores = [torch.tensor(ex['scores'])[None] for ex in batch]
-        scores = torch.cat(scores, dim=0)
-        batch_text_passages = [ex['passages'] for ex in batch]
-        batch_passage_ids, batch_passage_masks = self.encode_passages(batch_text_passages, self.tokenizer)
-        batch_concatenation_ids, batch_concatenation_masks = None, None
-
-        return (index, question_ids, question_mask, batch_passage_ids, batch_passage_masks, scores)
-    
-    def encode_passages(self, batch_text_passages, tokenizer):
-        batch_encoded_passages = []
-        batch_passage_ids, batch_passage_masks = [], []
-        max_context_length = 0
-        for k, text_passages in enumerate(batch_text_passages):
-            p = tokenizer.batch_encode_plus(text_passages, max_length=self.max_passage_length, pad_to_max_length=True, truncation=True, return_tensors='pt')
-            p_ids = p['input_ids']
-            p_masks = p['attention_mask']
-            batch_passage_ids.append(p_ids[None])
-            batch_passage_masks.append(p_masks[None])
-        batch_passage_ids = torch.cat(batch_passage_ids, dim=0)
-        batch_passage_masks = torch.cat(batch_passage_masks, dim=0).bool()
-        return batch_passage_ids, batch_passage_masks
-
-
 def load_data(data_path=None, global_rank=-1, world_size=-1, maxload=-1):
     assert data_path
     if data_path.endswith('.jsonl'):

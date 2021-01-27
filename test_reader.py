@@ -22,32 +22,29 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
     if hasattr(model, "module"):
         model = model.module
     if opt.write_crossattention_scores:
+        model.overwrite_forward_crossattention()
         model.reset_score_storage() 
     total = 0
-    ems = []
+    exactmatch = []
     if opt.write_results:
-        write_path = os.path.join(opt.checkpoint_dir, opt.name, 'test_results')
-        fw = open(os.path.join(write_path, '%d.txt'%opt.global_rank), 'a')
+        write_path = Path(opt.checkpoint_dir) / opt.name / 'test_results'
+        fw = open(write_path / '%d.txt'%opt.global_rank), 'a')
     with torch.no_grad():
         for i, batch in enumerate(dataloader):
-            (idx, answer_ids,
-                answer_mask, context_ids, context_mask) = batch
-            answer_ids, answer_mask = answer_ids.cuda(), answer_mask.bool().cuda()
+            (idx, answer_ids, answer_mask, context_ids, context_mask) = batch
             n_passages = context_ids.size(1) 
             model.encoder.n_passages = n_passages
-            context_ids = context_ids.cuda()
-            context_mask = context_mask.cuda()
 
             if opt.write_crossattention_scores:
                 model.reset_score_storage()
 
             outputs = model.generate(
-                input_ids=context_ids.view(context_ids.size(0), -1),
-                attention_mask=context_mask.view(context_ids.size(0), -1),
+                input_ids=context_ids.cuda().view(context_ids.size(0), -1),
+                attention_mask=context_mask.cuda().view(context_ids.size(0), -1),
                 max_length=50,
             )
             if opt.write_crossattention_scores:
-                crossattention_scores = model.get_crossattention_scores(context_mask)
+                crossattention_scores = model.get_crossattention_scores(context_mask.cuda())
 
             for k, o in enumerate(outputs):
                 ans = tokenizer.decode(o, skip_special_tokens=True)
@@ -55,8 +52,8 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
                 question = example['question']
                 gold = example['answers']
                 exid = example['id']
-                ems_score = reader.evaluation.ems(ans, gold)
-                ems.append(ems_score)
+                score = reader.evaluation.ems(ans, gold)
+                exactmatch.append(score)
 
                 if opt.write_results:
                     fw.write(str(exid) + "\t" + ans + '\n')
@@ -68,13 +65,13 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
                 total += 1
             if (i + 1) % opt.eval_print_freq == 0:
                 logger.warning(
-                    f'{opt.global_rank}, {i+1} / {len(dataloader)} -- average = {np.mean(ems):.3f}'
+                    f'Process rank:{opt.global_rank}, {i+1} / {len(dataloader)} -- average = {np.mean(exactmatch):.3f}'
                 )
 
-    logger.warning(f'{opt.global_rank}, total {total} -- average = {np.mean(ems):.3f}')
+    logger.warning(f'Process rank:{opt.global_rank}, total {total} -- average = {np.mean(exactmatch):.3f}')
     if opt.is_distributed:
         torch.distributed.barrier()
-    score, total = util.weighted_average(np.mean(ems), total, opt)
+    score, total = util.weighted_average(np.mean(exactmatch), total, opt)
     
     return score, total
 
@@ -89,7 +86,7 @@ if __name__ == "__main__":
     opt.train_batch_size = opt.per_gpu_batch_size * max(1, opt.world_size)
     logger.info("Distributed training")
 
-    dir_path = os.path.join(opt.checkpoint_dir, opt.name)
+    dir_path = Path(opt.checkpoint_dir)/opt.name
 
     model_class = reader.fidt5.FiDT5
     tokenizer = transformers.T5Tokenizer.from_pretrained('t5-base', return_dict=False)
@@ -102,39 +99,24 @@ if __name__ == "__main__":
     eval_dataloader = DataLoader(eval_dataset, sampler=eval_sampler, batch_size=opt.per_gpu_batch_size,
         shuffle=False, num_workers=20, collate_fn=collator_function)
 
-    directory_exists = os.path.exists(dir_path)
+    directory_exists = dir_path.exists()
     if opt.is_distributed:
         torch.distributed.barrier()
-    os.makedirs(dir_path, exist_ok=True)
+    dir_path.mkdir(parents=True, exist_ok=True)
     if opt.write_results:
-        os.makedirs(os.path.join(dir_path, 'test_results'), exist_ok=True)
+        (dir_path / 'test_results').mkdir(parents=True, exist_ok=True)
     if not directory_exists and opt.is_main:
         options.print_options(opt)
-    if opt.is_distributed:
-        torch.distributed.barrier()
-    file_handler = logging.FileHandler(filename=os.path.join(dir_path, "run.log"))
-    stdout_handler = logging.StreamHandler(sys.stdout)
-    handlers = [file_handler, stdout_handler]
-    logging.basicConfig(
-        datefmt="%m/%d/%Y %H:%M:%S",
-        level=logging.INFO if opt.is_main else logging.WARN,
-        format="[%(asctime)s] {%(filename)s:%(lineno)d} %(levelname)s - %(message)s",
-        handlers=handlers,
-    )
+    logger = util.init_logger()
 
     model = model_class.from_pretrained(opt.model_path)
     model.wrap_encoder()
-    if opt.write_crossattention_scores:
-        model.overwrite_forward_crossattention()
-
-    model = model.cuda()
+    model = model.to(opt.device)
 
     logger.info("Start eval")
-    ems, total = evaluate(model, eval_dataset, eval_dataloader, tokenizer, opt)
+    exactmatch, total = evaluate(model, eval_dataset, eval_dataloader, tokenizer, opt)
 
-    logger.info(f'EM {100*ems:.2f}')
-    logger.info(f'Total number of example {total}')
-
+    logger.info(f'EM {100*exactmatch:.2f}, Total number of example {total}')
 
     if opt.write_results and opt.is_main:
         glob_path = Path(opt.checkpoint_dir) / opt.name / 'test_results'

@@ -1,4 +1,3 @@
-import os
 import time
 import sys
 import torch
@@ -22,7 +21,8 @@ def train(model, optimizer, scheduler, step, train_dataset, eval_dataset, opt, c
     if opt.is_main:
         tb_logger = torch.utils.tensorboard.SummaryWriter(Path(opt.checkpoint_dir)/opt.name)
 
-    train_sampler = DistributedSampler(train_dataset) if opt.is_distributed else RandomSampler(train_dataset) 
+    train_sampler = DistributedSampler(train_dataset) if opt.is_distributed \
+        else RandomSampler(train_dataset) 
     train_dataloader = DataLoader(train_dataset, sampler=train_sampler, 
         batch_size=opt.per_gpu_batch_size, drop_last=True, num_workers=10, collate_fn=collator)
 
@@ -129,8 +129,7 @@ if __name__ == "__main__":
     opt.train_batch_size = opt.per_gpu_batch_size * max(1, opt.world_size)
     logger.info("Distributed training")
 
-
-    dir_path = os.path.join(opt.checkpoint_dir, opt.name)
+    dir_path = Path(opt.checkpoint_dir)/opt.name
 
     model_name = 't5-' + opt.model_size
     model_class = reader.model.FiDT5
@@ -138,19 +137,29 @@ if __name__ == "__main__":
     collator = reader.data.Collator(opt.text_maxlength, tokenizer)
 
     train_examples = reader.data.load_data(opt.train_data, maxload=opt.maxload)
-    train_dataset = reader.data.Dataset(train_examples, opt.n_context, tokenizer, text_maxlength=opt.text_maxlength)
+    train_dataset = reader.data.Dataset(
+        train_examples, 
+        opt.n_context, 
+        tokenizer, 
+        text_maxlength=opt.text_maxlength
+    )
     eval_examples = reader.data.load_data(
         opt.eval_data, 
         global_rank=opt.global_rank, 
-        world_size=opt.world_size, #use the global rank and world size attibutes to split the dev set on multiple gpus
+        world_size=opt.world_size, #use the global rank and world size attibutes to split the eval set on multiple gpus
         maxload=opt.maxload
     )     
-    eval_dataset = reader.data.Dataset(eval_examples, opt.n_context, tokenizer, text_maxlength=opt.text_maxlength)
+    eval_dataset = reader.data.Dataset(
+        eval_examples, 
+        opt.n_context, 
+        tokenizer, 
+        text_maxlength=opt.text_maxlength
+    )
 
-    directory_exists = os.path.exists(dir_path)
+    directory_exists = dir_path.exists()
     if opt.is_distributed:
         torch.distributed.barrier()
-    os.makedirs(dir_path, exist_ok=True)
+    dir_path.mkdir(parents=True, exist_ok=True)
     if not directory_exists and opt.is_main:
         options.print_options(opt)
     util.init_logger(opt)
@@ -166,7 +175,7 @@ if __name__ == "__main__":
         model = model.to(opt.local_rank)
         optimizer, scheduler = util.set_optim(opt, model)
     elif opt.model_path == "none":
-        load_path = os.path.join(dir_path, 'checkpoint', 'latest') 
+        load_path = dir_path / 'checkpoint' / 'latest'
         model, optimizer, scheduler, opt_checkpoint, step, best_dev_em = util.load(
             model_class, load_path, opt, reset_params=False
         )

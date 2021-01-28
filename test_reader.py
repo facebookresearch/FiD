@@ -1,4 +1,3 @@
-import os
 import sys
 import torch
 import transformers
@@ -64,9 +63,9 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
 
                 total += 1
             if (i + 1) % opt.eval_print_freq == 0:
-                logger.warning(
-                    f'Process rank:{opt.global_rank}, {i+1} / {len(dataloader)} -- average = {np.mean(exactmatch):.3f}'
-                )
+                log = f'Process rank:{opt.global_rank}, {i+1} / {len(dataloader)}'
+                log += f' -- average = {np.mean(exactmatch):.3f}'
+                logger.warning(log)
 
     logger.warning(f'Process rank:{opt.global_rank}, total {total} -- average = {np.mean(exactmatch):.3f}')
     if opt.is_distributed:
@@ -92,12 +91,27 @@ if __name__ == "__main__":
     tokenizer = transformers.T5Tokenizer.from_pretrained('t5-base', return_dict=False)
 
     collator_function = reader.data.Collator(opt.text_maxlength, tokenizer)
-    eval_examples = reader.data.load_data(opt.eval_data_path, global_rank=opt.global_rank, world_size=opt.world_size)
-    eval_dataset = reader.data.Dataset(eval_examples, opt.n_context, tokenizer, opt.text_maxlength, opt.no_title, )
+    eval_examples = reader.data.load_data(
+        opt.eval_data_path, 
+        global_rank=opt.global_rank, #use the global rank and world size attibutes to split the eval set on multiple gpus
+        world_size=opt.world_size
+    )
+    eval_dataset = reader.data.Dataset(
+        eval_examples, 
+        opt.n_context, 
+        tokenizer, 
+        opt.text_maxlength, 
+        opt.no_title, 
+    )
 
     eval_sampler = SequentialSampler(eval_dataset) 
-    eval_dataloader = DataLoader(eval_dataset, sampler=eval_sampler, batch_size=opt.per_gpu_batch_size,
-        shuffle=False, num_workers=20, collate_fn=collator_function)
+    eval_dataloader = DataLoader(
+        eval_dataset, 
+        sampler=eval_sampler, 
+        batch_size=opt.per_gpu_batch_size,
+        num_workers=20, 
+        collate_fn=collator_function
+    )
 
     directory_exists = dir_path.exists()
     if opt.is_distributed:

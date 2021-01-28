@@ -19,14 +19,20 @@ logger = logging.getLogger(__name__)
 
 tok = transformers.BertTokenizer.from_pretrained('bert-base-uncased')
 
-def train_evaluate(model, optimizer, scheduler, global_step,
+def train(model, optimizer, scheduler, global_step,
                     train_dataset, dev_dataset, opt, collator_function, best_eval_loss):
 
     if opt.is_main:
         tb_logger = SummaryWriter(os.path.join(opt.checkpoint_dir, opt.name))
     train_sampler = DistributedSampler(train_dataset) if opt.is_distributed else RandomSampler(train_dataset)
-    train_dataloader = DataLoader(train_dataset, sampler=train_sampler, batch_size=opt.per_gpu_batch_size, 
-        drop_last=True, num_workers=10, collate_fn=collator_function)
+    train_dataloader = DataLoader(
+        train_dataset, 
+        sampler=train_sampler, 
+        batch_size=opt.per_gpu_batch_size, 
+        drop_last=True, 
+        num_workers=10, 
+        collate_fn=collator_function
+    )
 
 
 
@@ -177,10 +183,10 @@ if __name__ == "__main__":
     logger.info(f"Number of examples in train set: {len(train_dataset)}.")
     logger.info(f"Number of examples in eval set: {len(eval_dataset)}.")
 
-    directory_exists = os.path.exists(dir_path)
+    directory_exists = dir_path.exists()
     if opt.is_distributed:
         torch.distributed.barrier()
-    os.makedirs(dir_path, exist_ok=True)
+    dir_path.mkdir(parents=True, exist_ok=True)
     if not directory_exists and opt.is_main:
         options.print_options(opt)
     util.init_logger(opt)
@@ -208,10 +214,13 @@ if __name__ == "__main__":
 
     if opt.is_distributed:
         model = torch.nn.parallel.DistributedDataParallel(
-            model, device_ids=[opt.local_rank], output_device=opt.local_rank, find_unused_parameters=True,
+            model, 
+            device_ids=[opt.local_rank], 
+            output_device=opt.local_rank, 
+            find_unused_parameters=True,
         )
     
-    train_evaluate(
+    train(
         model, 
         optimizer,
         scheduler,

@@ -1,18 +1,3 @@
-# coding=utf-8
-# Copyright 2018 Mesh TensorFlow authors, T5 Authors and HuggingFace Inc. team.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 
 import types
 import torch
@@ -28,22 +13,33 @@ class FiDT5(transformers.T5ForConditionalGeneration):
 
     def wrap_encoder(self, use_checkpoint=False):
         """
-        Wrap T5 encoder into a module that performs operations to obtain a Fusion-in-Decoder model
+        Wrap T5 encoder to obtain a Fusion-in-Decoder model.
         """
         self.encoder = EncoderWrapper(self.encoder, use_checkpoint=use_checkpoint)
 
     def set_checkpoint(self, use_checkpoint):
         """
+        Enable or disable checkpointing (https://pytorch.org/docs/stable/checkpoint.html) in encoder.
         """
         for mod in self.encoder.encoder.block:
             mod.use_checkpoint = use_checkpoint
             mod.module.use_checkpoint = use_checkpoint
 
     def reset_score_storage(self):
+        """
+        Reset score storage (only used when cross-attention scores are saved to train a retriever)
+        """
         for mod in self.decoder.block:
             mod.layer[1].EncDecAttention.score_storage = None
 
     def get_crossattention_scores(self, context_mask):
+        """
+        Cross-attention scores are aggregated to obtain a single scalar per passage.
+        This scalar can be seen as a similarity score between the question and the input passage.
+        It is obtained by averaging the cross-attention scores obtained on the first decoded token 
+        over heads, layers, and tokens of the input passage.
+        More details in Distilling Knowledge from Reader to Retriever: https://arxiv.org/abs/2012.04584.
+        """
         scores = []
         n_passages = context_mask.size(1)
         for mod in self.decoder.block:
@@ -58,12 +54,16 @@ class FiDT5(transformers.T5ForConditionalGeneration):
         return scores
 
     def overwrite_forward_crossattention(self):
+        """
+        Replace cross-attention forward function, only used to save cross-attention scores.
+        """
         for mod in self.decoder.block:
             attn = mod.layer[1].EncDecAttention
             attn.forward = types.MethodType(cross_attention_forward, attn)
 
 class EncoderWrapper(torch.nn.Module):
     """
+    Encoder Wrapper for T5 Wrapper to obtain a Fusion-in-Decoder model.
     """
     def __init__(self, encoder, use_checkpoint=False):
         super().__init__()
@@ -81,6 +81,10 @@ class EncoderWrapper(torch.nn.Module):
         return outputs 
 
 class CheckpointWrapper(torch.nn.Module):
+    """
+    Wrapper applied to each block of the encoder to enable the use of checkpoint 
+    (https://pytorch.org/docs/stable/checkpoint.html) 
+    """
     def __init__(self, module, use_checkpoint=False):
         super().__init__()
         self.module = module
@@ -99,7 +103,6 @@ class CheckpointWrapper(torch.nn.Module):
                             output = output + (torch.tensor([], device=model_output[0].device, dtype=torch.float, requires_grad=True),)
                         else:
                             output = output + (x,)
-                    #return model_output
                     return output
                 return custom_forward
 
@@ -116,6 +119,9 @@ class CheckpointWrapper(torch.nn.Module):
 
 
 def apply_checkpoint_wrapper(t5stack, use_checkpoint):
+    """
+    Wrap each block of the encoder to enable checkpointing.
+    """
     block = []
     for mod in t5stack.block:
         wrapped_mod = CheckpointWrapper(mod, use_checkpoint)

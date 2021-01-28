@@ -97,15 +97,26 @@ class CheckpointWrapper(torch.nn.Module):
                 def custom_forward(*inputs):
                     model_output = module(*inputs, **kwargs)
                     output = ()
+                    empty_tensor = torch.tensor(
+                        [], 
+                        device=model_output[0].device, 
+                        dtype=torch.float, 
+                        requires_grad=True
+                    )
                     for x in model_output:
                         if x is None:
-                            output = output + (torch.tensor([], device=model_output[0].device, dtype=torch.float, requires_grad=True),)
+                            output = output + (empty_tensor,)
                         else:
                             output = output + (x,)
                     return output
                 return custom_forward
 
-            out = torch.utils.checkpoint.checkpoint(create_custom_forward(self.module), hidden_states, attention_mask, position_bias)
+            out = torch.utils.checkpoint.checkpoint(
+                create_custom_forward(self.module), 
+                hidden_states, 
+                attention_mask, 
+                position_bias
+            )
             outputs = ()
             for x in out:
                 if len(x.size()) == 0:

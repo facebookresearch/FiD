@@ -30,7 +30,7 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
         fw = open(write_path / '%d.txt'%opt.global_rank), 'a')
     with torch.no_grad():
         for i, batch in enumerate(dataloader):
-            (idx, answer_ids, answer_mask, context_ids, context_mask) = batch
+            (idx, _, context_ids, context_mask) = batch
             n_passages = context_ids.size(1) 
             model.encoder.n_passages = n_passages
 

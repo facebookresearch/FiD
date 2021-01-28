@@ -41,8 +41,6 @@ def train_evaluate(model, optimizer, scheduler, global_step,
         for i, batch in enumerate(train_dataloader):
             global_step += 1
             (idx, question_ids, question_mask, context_ids, context_mask, gold_score) = batch
-            #print(tok.decode(context_ids[0, 0]))
-            #print(tok.decode(question_ids[0]))
             _, _, _, train_loss = model(
                 question_ids=question_ids.cuda(),
                 question_mask=question_mask.cuda(),
@@ -161,11 +159,20 @@ if __name__ == "__main__":
 
     tokenizer = transformers.BertTokenizerFast.from_pretrained('bert-base-uncased')
 
-    collator_function = retriever.data.Collator(tokenizer, passage_maxlength=opt.passage_maxlength, question_maxlength=opt.question_maxlength)
+    collator_function = retriever.data.Collator(
+        tokenizer, 
+        passage_maxlength=opt.passage_maxlength, 
+        question_maxlength=opt.question_maxlength
+    )
 
     train_examples = retriever.data.load_data(opt.train_data_path, maxload=opt.maxload)
     train_dataset = retriever.data.Dataset(train_examples, opt.n_context)
-    eval_examples = retriever.data.load_data(opt.eval_data_path, global_rank=opt.global_rank, world_size=opt.world_size, maxload=opt.maxload) #use the global rank and world size attibutes to split the dev set on multiple gpus
+    eval_examples = retriever.data.load_data(
+        opt.eval_data_path, 
+        global_rank=opt.global_rank, 
+        world_size=opt.world_size, 
+        maxload=opt.maxload
+    ) #use the global rank and world size attibutes to split the dev set on multiple gpus
     eval_dataset = retriever.data.Dataset(eval_examples, opt.n_context)
     logger.info(f"Number of examples in train set: {len(train_dataset)}.")
     logger.info(f"Number of examples in eval set: {len(eval_dataset)}.")

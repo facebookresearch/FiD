@@ -27,9 +27,14 @@ class FiDT5(transformers.T5ForConditionalGeneration):
         super().__init__(config)
 
     def wrap_encoder(self, use_checkpoint=False):
+        """
+        Wrap T5 encoder into a module that performs operations to obtain a Fusion-in-Decoder model
+        """
         self.encoder = EncoderWrapper(self.encoder, use_checkpoint=use_checkpoint)
 
     def set_checkpoint(self, use_checkpoint):
+        """
+        """
         for mod in self.encoder.encoder.block:
             mod.use_checkpoint = use_checkpoint
             mod.module.use_checkpoint = use_checkpoint
@@ -54,10 +59,12 @@ class FiDT5(transformers.T5ForConditionalGeneration):
 
     def overwrite_forward_crossattention(self):
         for mod in self.decoder.block:
-            attn = mod.layer[1].EncDecAttention # = T5AttentionScoreRegistration(mod.layer[1].EncDecAttention)
+            attn = mod.layer[1].EncDecAttention
             attn.forward = types.MethodType(cross_attention_forward, attn)
 
 class EncoderWrapper(torch.nn.Module):
+    """
+    """
     def __init__(self, encoder, use_checkpoint=False):
         super().__init__()
 
@@ -65,12 +72,12 @@ class EncoderWrapper(torch.nn.Module):
         apply_checkpoint_wrapper(self.encoder, use_checkpoint)
     
     def forward(self, input_ids=None, attention_mask=None, **kwargs,):
-        bsz, tc = input_ids.shape
-        plen = tc // self.n_passages
-        input_ids = input_ids.view(bsz*self.n_passages, plen)
-        attention_mask = attention_mask.view(bsz*self.n_passages, plen)
+        bsz, total_length = input_ids.shape #total length = n_passages * passage_length
+        passage_length = total_length // self.n_passages
+        input_ids = input_ids.view(bsz*self.n_passages, passage_length)
+        attention_mask = attention_mask.view(bsz*self.n_passages, passage_length)
         outputs = self.encoder(input_ids, attention_mask, **kwargs)
-        outputs = (outputs[0].view(bsz, self.n_passages*plen, -1), ) + outputs[1:]
+        outputs = (outputs[0].view(bsz, self.n_passages*passage_length, -1), ) + outputs[1:]
         return outputs 
 
 class CheckpointWrapper(torch.nn.Module):

@@ -1,5 +1,15 @@
 import numpy as np
 
+def eval_batch(scores, metric_at, inversions, top_metric, avg_metric):
+    for k, s in enumerate(scores):
+        s = s.cpu().numpy()
+        sorted_idx = np.argsort(-s)
+        inv, el_topm, el_avgm = score(sorted_idx, metric_at)
+        inversions.append(inv)
+        for k in top_metric:
+            top_metric[k].append(el_topm[k])
+            avg_metric[k].append(el_avgm[k]) 
+
 def count_inversions(arr): 
     inv_count = 0
     lenarr = len(arr)

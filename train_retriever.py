@@ -34,8 +34,6 @@ def train(model, optimizer, scheduler, global_step,
         collate_fn=collator_function
     )
 
-
-
     loss, curr_loss = 0.0, 0.0
     epoch = 1
     #eval_loss, top_metric, avg_metric = evaluate(model, dev_dataset, dev_dataloader, tokenizer, opt)
@@ -126,20 +124,8 @@ def evaluate(model, dataset, dataset, tokenizer, opt):
                 passage_mask=context_mask.cuda(),
                 gold_score=gold_score.cuda(),
             )
-            for k, s in enumerate(scores):
-                curr_idx = idx[k]
-                has_answer = [dataset.data[curr_idx]['ctxs'][k]['has_answer'] for k in range(opt.n_context)]
-                ass = [dataset.data[curr_idx]['ctxs'][k]['score'] for k in range(opt.n_context)]
-                s = s.cpu().numpy()
-                sorted_idx = np.argsort(-s)
-                sorted_has_answer = np.array(has_answer)[sorted_idx]
-                inv, el_topm, el_avgm = retriever.evaluation.score(sorted_idx, metric_at)
-                inversions.append(inv)
-                for k in top_metric:
-                    top_metric[k].append(el_topm[k])
-                    avg_metric[k].append(el_avgm[k]) 
-                eval_loss.append(loss.item())
 
+            retriever.evaluation.score(scores, metric_at, top_metric, avg_metric)
             total += question_ids.size(0)
 
     inversions = util.weighted_average(np.mean(inversions), total, opt)[0]

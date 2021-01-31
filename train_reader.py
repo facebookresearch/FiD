@@ -45,9 +45,9 @@ def train(model, optimizer, scheduler, step, train_dataset, eval_dataset, opt, c
             train_loss = model(
                 input_ids=context_ids.cuda().view(context_ids.size(0), -1),
                 attention_mask=context_mask.cuda().view(context_ids.size(0), -1),
-                #decoder_attention_mask=answer_mask.cuda(),
                 labels=labels.cuda()
             )[0]
+
             train_loss.backward()
 
             if step % opt.accumulation_steps == 0:

@@ -105,7 +105,7 @@ class CheckpointWrapper(torch.nn.Module):
                     )
                     for x in model_output:
                         if x is None:
-                            output = output + (empty_tensor,)
+                            output = output + (empty_tensor,) #checkpoint doesn't work if there is tensor with requires_grad=False
                         else:
                             output = output + (x,)
                     return output

@@ -5,13 +5,13 @@ import slurm
 import logging
 import reader.data
 import util
-from reader.fidt5 import FiDT5
 import numpy as np
 from pathlib import Path
 import torch.distributed as dist
 from options import Options
 from torch.utils.data import DataLoader, SequentialSampler
 import reader.evaluation
+import reader.model
 import types
 logger = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
     exactmatch = []
     if opt.write_results:
         write_path = Path(opt.checkpoint_dir) / opt.name / 'test_results'
-        fw = open(write_path / '%d.txt'%opt.global_rank), 'a')
+        fw = open(write_path / '%d.txt'%opt.global_rank, 'a')
     with torch.no_grad():
         for i, batch in enumerate(dataloader):
             (idx, _, context_ids, context_mask) = batch
@@ -63,7 +63,7 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
 
                 total += 1
             if (i + 1) % opt.eval_print_freq == 0:
-                log = f'Process rank:{opt.global_rank}, {i+1} / {len(dataloader)}'
+                log = f'{opt.eval_print_freq}, Process rank:{opt.global_rank}, {i+1} / {len(dataloader)}'
                 log += f' -- average = {np.mean(exactmatch):.3f}'
                 logger.warning(log)
 
@@ -87,12 +87,12 @@ if __name__ == "__main__":
 
     dir_path = Path(opt.checkpoint_dir)/opt.name
 
-    model_class = reader.fidt5.FiDT5
+    model_class = reader.model.FiDT5
     tokenizer = transformers.T5Tokenizer.from_pretrained('t5-base', return_dict=False)
 
     collator_function = reader.data.Collator(opt.text_maxlength, tokenizer)
     eval_examples = reader.data.load_data(
-        opt.eval_data_path, 
+        opt.eval_data, 
         global_rank=opt.global_rank, #use the global rank and world size attibutes to split the eval set on multiple gpus
         world_size=opt.world_size
     )
@@ -121,7 +121,7 @@ if __name__ == "__main__":
         (dir_path / 'test_results').mkdir(parents=True, exist_ok=True)
     if not directory_exists and opt.is_main:
         options.print_options(opt)
-    logger = util.init_logger()
+    util.init_logger(opt)
 
     model = model_class.from_pretrained(opt.model_path)
     model.wrap_encoder()

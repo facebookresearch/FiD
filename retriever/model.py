@@ -7,11 +7,11 @@ from transformers import PretrainedConfig, BertConfig
 
 class RetrieverConfig(BertConfig):
 
-    def __init__(self, indexing_dimension=768, apply_mask_question=False, apply_mask_passage=False, passage_maxlength=200, question_maxlength=40, projection=True, **kwargs):
+    def __init__(self, indexing_dimension=768, apply_question_mask=False, apply_passage_mask=False, passage_maxlength=200, question_maxlength=40, projection=True, **kwargs):
         super().__init__(**kwargs)
         self.indexing_dimension = indexing_dimension
-        self.apply_mask_question = apply_mask_question
-        self.apply_mask_passage = apply_mask_passage
+        self.apply_question_mask = apply_question_mask
+        self.apply_passage_mask = apply_passage_mask
         self.passage_maxlength = passage_maxlength
         self.question_maxlength = question_maxlength
         self.projection = projection
@@ -26,8 +26,8 @@ class Retriever(PreTrainedModel):
         super().__init__(config)
         assert config.projection or config.indexing_dimension == 768, 'If no projection then indexing dimension must be equal to 768'
         self.config = config
-        self.apply_passage_mask = self.config.apply_passage_mask
-        self.apply_question_mask = self.config.apply_question_mask
+        self.apply_passage_mask = config.apply_passage_mask
+        self.apply_question_mask = config.apply_question_mask
         if initialize_wBERT:
             self.model = transformers.BertModel.from_pretrained('bert-base-uncased')
         else:

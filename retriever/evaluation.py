@@ -1,14 +1,10 @@
 import numpy as np
 
-def eval_batch(scores, metric_at, inversions, top_metric, avg_metric):
+def eval_batch(scores, inversions, avg_topk, idx_topk):
     for k, s in enumerate(scores):
         s = s.cpu().numpy()
         sorted_idx = np.argsort(-s)
-        inv, el_topm, el_avgm = score(sorted_idx, metric_at)
-        inversions.append(inv)
-        for k in top_metric:
-            top_metric[k].append(el_topm[k])
-            avg_metric[k].append(el_avgm[k]) 
+        score(sorted_idx, inversions, avg_topk, idx_topk)
 
 def count_inversions(arr): 
     inv_count = 0
@@ -19,16 +15,15 @@ def count_inversions(arr):
                 inv_count += 1
     return inv_count
 
-def score(x, metric_at):
-    el_topm, el_avgm = {}, {}
-    inversions = count_inversions(x)
+def score(x, inversions, avg_topk, idx_topk):
     x = np.array(x)
-    for k in metric_at:
-        t = (x[:k]<k).mean()
-        a = (x<k)
-        a = len(x) - np.argmax(a[::-1])
-        el_topm[k] = t
-        el_avgm[k] = a
-    return inversions, el_topm, el_avgm
+    inversions.append(count_inversions(x))
+    for k in avg_topk:
+        avg_pred_topk = (x[:k]<k).mean() #ratio of passages in the predicted top-k that are also in the topk given by gold score
+        avg_topk[k].append(avg_pred_topk)
+    for k in idx_topk:
+        below_k = (x<k)
+        idx_gold_topk = len(x) - np.argmax(below_k[::-1]) #number of passages required to obtain all passages from gold top-k
+        idx_topk[k].append(idx_gold_topk)
     
     

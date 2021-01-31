@@ -1,4 +1,3 @@
-import os
 import time
 import sys
 import torch
@@ -14,16 +13,17 @@ from torch.utils.data import DataLoader, RandomSampler, DistributedSampler, Sequ
 import retriever.evaluation
 import retriever.data
 import retriever.model
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
 tok = transformers.BertTokenizer.from_pretrained('bert-base-uncased')
 
 def train(model, optimizer, scheduler, global_step,
-                    train_dataset, dev_dataset, opt, collator_function, best_eval_loss):
+                    train_dataset, dev_dataset, opt, collator, best_eval_loss):
 
     if opt.is_main:
-        tb_logger = SummaryWriter(os.path.join(opt.checkpoint_dir, opt.name))
+        tb_logger = torch.utils.tensorboard.SummaryWriter(Path(opt.checkpoint_dir)/opt.name)
     train_sampler = DistributedSampler(train_dataset) if opt.is_distributed else RandomSampler(train_dataset)
     train_dataloader = DataLoader(
         train_dataset, 
@@ -31,7 +31,7 @@ def train(model, optimizer, scheduler, global_step,
         batch_size=opt.per_gpu_batch_size, 
         drop_last=True, 
         num_workers=10, 
-        collate_fn=collator_function
+        collate_fn=collator
     )
 
     loss, curr_loss = 0.0, 0.0
@@ -44,12 +44,12 @@ def train(model, optimizer, scheduler, global_step,
         epoch += 1
         for i, batch in enumerate(train_dataloader):
             global_step += 1
-            (idx, question_ids, question_mask, context_ids, context_mask, gold_score) = batch
+            (idx, question_ids, question_mask, passage_ids, passage_mask, gold_score) = batch
             _, _, _, train_loss = model(
                 question_ids=question_ids.cuda(),
                 question_mask=question_mask.cuda(),
-                passage_ids=context_ids.cuda(),
-                passage_mask=context_mask.cuda(),
+                passage_ids=passage_ids.cuda(),
+                passage_mask=passage_mask.cuda(),
                 gold_score=gold_score.cuda(),
             )
 
@@ -65,7 +65,7 @@ def train(model, optimizer, scheduler, global_step,
             curr_loss += train_loss.item()
 
             if global_step % opt.eval_freq == 0:
-                eval_loss, inversions, top_metric, avg_metric = evaluate(model, dev_dataset, dev_dataloader, tokenizer, opt)
+                eval_loss, inversions, avg_topk, idx_topk = evaluate(model, dev_dataset, collator, opt)
                 if opt.is_main:
                     tb_logger.add_scalar("Evaluation", eval_loss, global_step)
                 if eval_loss < best_eval_loss:
@@ -79,8 +79,10 @@ def train(model, optimizer, scheduler, global_step,
                     log += f", eval: {eval_loss:.6f}"
                     log += f", inv: {inversions:.1f}"
                     log += f", lr: {scheduler.get_last_lr()[0]:.6f}"
-                    for k in top_metric:
-                        log += f"| top{k}: {100*top_metric[k]:.1f} | avg{k}: {avg_metric[k]:.1f}"
+                    for k in avg_topk:
+                        log += f" | avg top{k}: {100*avg_topk[k]:.1f}"
+                    for k in idx_topk:    
+                        log += f" | idx top{k}: {idx_topk[k]:.1f}"
                     logger.info(log)
                     tb_logger.add_scalar("Training", curr_loss / (opt.eval_freq), global_step)
                     curr_loss = 0
@@ -91,10 +93,10 @@ def train(model, optimizer, scheduler, global_step,
                 break
 
 
-def evaluate(model, dataset, dataset, tokenizer, opt):
+def evaluate(model, dataset, collator, opt):
     sampler = SequentialSampler(dataset)
     dataloader = DataLoader(
-        dev_dataset, 
+        dataset, 
         sampler=sampler, 
         batch_size=opt.per_gpu_batch_size,
         drop_last=False, 
@@ -107,12 +109,9 @@ def evaluate(model, dataset, dataset, tokenizer, opt):
     total = 0
     eval_loss = []
 
-    top_metric, avg_metric = {}, {}
+    avg_topk = {k:[] for k in [1, 2, 5] if k <= opt.n_context}
+    idx_topk = {k:[] for k in [1, 2, 5] if k <= opt.n_context}
     inversions = []
-    metric_at = [i for i in [1, 2, 5] if i <= opt.n_context]
-    for k in metric_at:
-        top_metric[k] = []
-        avg_metric[k] = []
     with torch.no_grad():
         for i, batch in enumerate(dataloader):
             (idx, question_ids, question_mask, context_ids, context_mask, gold_score) = batch
@@ -125,16 +124,15 @@ def evaluate(model, dataset, dataset, tokenizer, opt):
                 gold_score=gold_score.cuda(),
             )
 
-            retriever.evaluation.score(scores, metric_at, top_metric, avg_metric)
+            retriever.evaluation.eval_batch(scores, inversions, avg_topk, idx_topk)
             total += question_ids.size(0)
 
     inversions = util.weighted_average(np.mean(inversions), total, opt)[0]
-    for k in top_metric:
-        top_metric[k] = util.weighted_average(np.mean(top_metric[k]), total, opt)[0]
-        avg_metric[k] = util.weighted_average(np.mean(avg_metric[k]), total, opt)[0]
+    for k in avg_topk:
+        avg_topk[k] = util.weighted_average(np.mean(avg_topk[k]), total, opt)[0]
+        idx_topk[k] = util.weighted_average(np.mean(idx_topk[k]), total, opt)[0]
 
-
-    return loss, inversions, top_metric, avg_metric
+    return loss, inversions, avg_topk, idx_topk
 
 if __name__ == "__main__":
     options = Options(option_type='retriever')
@@ -147,7 +145,7 @@ if __name__ == "__main__":
     opt.train_batch_size = opt.per_gpu_batch_size * max(1, opt.world_size)
     logger.info("Distributed training")
 
-    dir_path = os.path.join(opt.checkpoint_dir, opt.name)
+    dir_path = Path(opt.checkpoint_dir)/opt.name
 
     tokenizer = transformers.BertTokenizerFast.from_pretrained('bert-base-uncased')
 
@@ -157,10 +155,10 @@ if __name__ == "__main__":
         question_maxlength=opt.question_maxlength
     )
 
-    train_examples = retriever.data.load_data(opt.train_data_path, maxload=opt.maxload)
+    train_examples = retriever.data.load_data(opt.train_data, maxload=opt.maxload)
     train_dataset = retriever.data.Dataset(train_examples, opt.n_context)
     eval_examples = retriever.data.load_data(
-        opt.eval_data_path, 
+        opt.eval_data, 
         global_rank=opt.global_rank, 
         world_size=opt.world_size, 
         maxload=opt.maxload
@@ -187,8 +185,9 @@ if __name__ == "__main__":
         model = model.to(opt.device)
         optimizer, scheduler = util.set_optim(opt, model)
     elif opt.model_path == "none":
+        load_path = dir_path / 'checkpoint' / 'latest'
         model, optimizer, scheduler, opt_checkpoint, global_step, best_eval_loss = util.load(
-            model_class, os.path.join(dir_path, 'checkpoint', 'latest'), opt, reset_params=False
+            model_class, load_path, opt, reset_params=False
         )
         logger.info(f"Model loaded from {dir_path}")
     else:

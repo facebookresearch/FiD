@@ -60,6 +60,7 @@ def load(model_class, dir_path, opt, reset_params=False):
     optimizer_path = os.path.join(epoch_path, "optimizer.pth.tar")
     logger.info("Loading %s" % epoch_path)
     model = model_class.from_pretrained(epoch_path)
+    model = model.to(opt.device) 
     logger.info("loading checkpoint %s" %optimizer_path)
     checkpoint = torch.load(optimizer_path, map_location=opt.device)
     opt_checkpoint = checkpoint["opt"]
@@ -75,7 +76,6 @@ def load(model_class, dir_path, opt, reset_params=False):
     else:
         optimizer, scheduler = set_optim(opt, model)
 
-    model = model.to(opt.device) 
     return model, optimizer, scheduler, opt_checkpoint, step, best_eval_metric
 
 

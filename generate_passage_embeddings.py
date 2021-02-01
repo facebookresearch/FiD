@@ -81,8 +81,6 @@ def main(opt):
                     passages.append((row[0], row[1], row[2]))
                 except:
                     logger.warning(f'The following input line has not been correctly loaded: {row}')
-            if k == 1000:
-                break
 
     shard_size = int(len(passages) / args.num_shards)
     start_idx = args.shard_id * shard_size

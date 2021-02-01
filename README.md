@@ -22,9 +22,9 @@ In what follows we explain how you can train a Fusion-in-Decoder model, and use 
 
 ```shell
 python train.py \
-  --use_checkpoint \
-  --train_data_path <train_data.json> \
-  --eval_data_path <eval_data.json> \
+  --use_checkpoint \ #use pytorch checkpointing
+  --train_data <train_data.json> \
+  --eval_data <eval_data.json> \
   --model_size base \
   --per_gpu_batch_size 1 \
   --n_context 100 \
@@ -39,7 +39,7 @@ python train.py \
 ```shell
 python test.py \
   --model_path <my_model_path> \
-  --eval_data_path <my_test_data.json> \
+  --eval_data <my_test_data.json> \
   --per_gpu_batch_size 4 \
   --n_context 100 \
   --name my_test \
@@ -107,8 +107,8 @@ python train_retriever.py \
         --optim adamw \
         --scheduler linear \
         --weight_decay 0.01 \
-        --train_data_path <path> \
-        --eval_data_path <path> \
+        --train_data <path> \
+        --eval_data <path> \
         --per_gpu_batch_size 1 \
         --n_context 100 \
         --total_steps 20000 \
@@ -125,7 +125,7 @@ Now that we have trained our retriever,
 ```shell
 python3 generate_retriever_embedding.py \
         --model_path <model_path> \ #directory
-        --passages_path <passage_path> \ #.tsv file
+        --passages <passages.tsv> \ #.tsv file
         --output_path  \
         --shard_id 0 \
         --num_shards 1 \
@@ -140,7 +140,7 @@ After indexing, given an input query, passages can be efficiently retrieved:
 ```shell
 python index_retrieval.py \
     --model_path <model_path> \
-    --passages_path <passages_path> \
+    --passages <passages.tsv> \
     --data_path <data_path> \
     --passages_embeddings_path "wikipedia_embeddings/wiki_*" \
     --output_path <output_path> \

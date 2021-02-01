@@ -1,3 +1,9 @@
+# Copyright (c) Facebook, Inc. and its affiliates.
+# All rights reserved.
+# 
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
 import types
 import torch
 import transformers
@@ -105,7 +111,7 @@ class CheckpointWrapper(torch.nn.Module):
                     )
                     for x in model_output:
                         if x is None:
-                            output = output + (empty_tensor,)
+                            output = output + (empty_tensor,) #checkpoint doesn't work if there is tensor with requires_grad=False
                         else:
                             output = output + (x,)
                     return output

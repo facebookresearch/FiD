@@ -1,3 +1,9 @@
+# Copyright (c) Facebook, Inc. and its affiliates.
+# All rights reserved.
+# 
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
 import torch
 import random
 import json
@@ -68,14 +74,15 @@ class Collator(object):
         target = [ex['target'] for ex in batch] 
         if target[0] is not None:
             target = self.tokenizer.batch_encode_plus(target, pad_to_max_length=True, return_tensors="pt")
-            target_ids, target_mask = target["input_ids"], target["attention_mask"]
+            target_ids, target_mask = target["input_ids"], target["attention_mask"].bool()
+            target_ids = target_ids.masked_fill(~target_mask, -100)
         else:
             target_ids, target_mask = None, None
 
         batch_text_passages = [ex['passages'] for ex in batch]
         batch_passage_ids, batch_passage_masks = self.encode_passages(batch_text_passages, self.tokenizer)
 
-        return (index, target_ids, target_mask.bool(), batch_passage_ids, batch_passage_masks.bool())
+        return (index, target_ids, batch_passage_ids, batch_passage_masks)
 
     def encode_passages(self, batch_text_passages, tokenizer):
         batch_encoded_passages = []
@@ -89,7 +96,7 @@ class Collator(object):
             batch_passage_masks.append(p_masks[None])
 
         batch_passage_ids = torch.cat(batch_passage_ids, dim=0)
-        batch_passage_masks = torch.cat(batch_passage_masks, dim=0)
+        batch_passage_masks = torch.cat(batch_passage_masks, dim=0).bool()
         return batch_passage_ids, batch_passage_masks
 
 

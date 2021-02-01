@@ -1,3 +1,9 @@
+# Copyright (c) Facebook, Inc. and its affiliates.
+# All rights reserved.
+# 
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
 import time
 import sys
 import torch
@@ -35,8 +41,7 @@ def train(model, optimizer, scheduler, step, train_dataset, eval_dataset, opt, c
         epoch += 1
         for i, batch in enumerate(train_dataloader):
             step += 1
-            (idx, answer_ids, answer_mask, context_ids, context_mask) = batch
-            labels = answer_ids.masked_fill(~answer_mask, -100)
+            (idx, labels, context_ids, context_mask) = batch
             n_passages = context_ids.size(1)
             if hasattr(model, "module"):
                 model.module.encoder.n_passages = n_passages
@@ -46,9 +51,9 @@ def train(model, optimizer, scheduler, step, train_dataset, eval_dataset, opt, c
             train_loss = model(
                 input_ids=context_ids.cuda().view(context_ids.size(0), -1),
                 attention_mask=context_mask.cuda().view(context_ids.size(0), -1),
-                decoder_attention_mask=answer_mask.cuda(),
                 labels=labels.cuda()
             )[0]
+
             train_loss.backward()
 
             if step % opt.accumulation_steps == 0:
@@ -98,7 +103,7 @@ def evaluate(model, dataset, tokenizer, collator, opt):
     model = model.module if hasattr(model, "module") else model
     with torch.no_grad():
         for i, batch in enumerate(dataloader):
-            (idx, answer_ids, answer_mask, context_ids, context_mask) = batch
+            (idx, _, context_ids, context_mask) = batch
             model.encoder.n_passages = context_ids.size(1)
 
             outputs = model.generate(

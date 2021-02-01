@@ -1,14 +1,9 @@
-#!/usr/bin/env python3
 # Copyright (c) Facebook, Inc. and its affiliates.
 # All rights reserved.
-#
+# 
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-"""
- Command line tool that produces embeddings for a large documents base based on the pretrained ctx & question encoders
- Supposed to be used in a 'sharded' way to speed up the process.
-"""
 import os
 import pathlib
 
@@ -76,9 +71,9 @@ def main(opt):
     if opt.world_size > 1 and opt.local_rank == -1:
         model = torch.nn.DataParallel(model)
 
-    logger.info(f'Passage file: {args.passages_path}')
+    logger.info(f'Passage file: {args.passages}')
     passages = []
-    with open(args.passages_path) as tsvfile:
+    with open(args.passages) as tsvfile:
         reader = csv.reader(tsvfile, delimiter='\t')
         for k, row in enumerate(reader):
             if not row[0] == 'id':
@@ -86,8 +81,6 @@ def main(opt):
                     passages.append((row[0], row[1], row[2]))
                 except:
                     logger.warning(f'The following input line has not been correctly loaded: {row}')
-            if k == 1000:
-                break
 
     shard_size = int(len(passages) / args.num_shards)
     start_idx = args.shard_id * shard_size
@@ -112,7 +105,7 @@ def main(opt):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--passages_path', type=str, default=None, help='Path to passages set .tsv file')
+    parser.add_argument('--passages', type=str, default=None, help='Path to passages set .tsv file')
     parser.add_argument('--output_path', required=True, type=str, default=None,
                         help='output .tsv file path to write results to ')
     parser.add_argument('--shard_id', type=int, default=0, help="Number(0-based) of data shard to process")

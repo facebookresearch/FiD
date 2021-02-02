@@ -10,8 +10,7 @@ from pathlib import Path
 
 
 class Options():
-    def __init__(self, option_type='reader'):
-        self.option_type = option_type
+    def __init__(self):
         self.parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
         self.initialize_parser()
         

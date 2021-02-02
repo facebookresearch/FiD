@@ -18,6 +18,7 @@ import torch
 import transformers
 
 import slurm
+import glob
 
 import util
 import retriever.data
@@ -43,7 +44,7 @@ def embed_questions(opt, data, model, tokenizer):
             output = model.embed_text(
                 text_ids=question_ids.to(opt.device), 
                 text_mask=question_mask.to(opt.device), 
-                apply_mask=model.apply_question_mask.to(opt.device)
+                apply_mask=model.apply_question_mask,
             )
             embedding.append(output)
 
@@ -65,11 +66,11 @@ def index_encoded_data(index, vector_files, maxload=None):
     allids = []
     allembeddings = torch.tensor([])
     for i, file_path in enumerate(vector_files):
+        logger.info(f'Loading file {file_path}')
         with open(file_path, 'rb') as fin:
             #ids, embeddings = torch.load(fin)
             ids, embeddings = pickle.load(fin)
 
-        embeddings = embeddings.numpy()
         index.index_data(ids, embeddings)
         counter += len(ids)
         if maxload is not None and counter >= maxload:
@@ -132,7 +133,7 @@ def save_results(data, passages, top_passages_and_scores, per_question_hits, out
 
 
 def main(opt):
-
+    util.init_logger(is_main=True)
     tokenizer = transformers.BertTokenizerFast.from_pretrained('bert-base-uncased')
     data = retriever.data.load_data(opt.data_path)
     model_class = retriever.model.Retriever
@@ -157,8 +158,9 @@ def main(opt):
         retriever.index.deserialize_from(index_path)
     else:
         logger.info(f'Indexing passages from files {input_paths}')
+        start_time_indexing = time.time()
         index_encoded_data(index, input_paths, maxload=args.maxload)
-        logger.info('Indexing time: %f sec.', time.time() - start_time_indexing)
+        logger.info(f'Indexing time: {time.time()-start_time_indexing:.1f} s.')
         if args.save_or_load_index:
             retriever.index.serialize(index_path)
     # get questions & answers
@@ -169,7 +171,7 @@ def main(opt):
     start_time_retrieval = time.time()
     nbatch = (len(questions_embedding)-1) // args.index_batch_size + 1
     top_ids_and_scores = index.search_knn(questions_embedding, args.top_docs) 
-    logger.info('index search time: %f sec.', time.time() - start_time_retrieval)
+    logger.info(f'Search time: {time.time()-start_time_retrieval:.1f} s.')
 
     all_passages = load_passages(args.passages_path, maxload=args.maxload)
 

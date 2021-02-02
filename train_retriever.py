@@ -21,9 +21,6 @@ import retriever.data
 import retriever.model
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
-
-tok = transformers.BertTokenizer.from_pretrained('bert-base-uncased')
 
 def train(model, optimizer, scheduler, global_step,
                     train_dataset, dev_dataset, opt, collator, best_eval_loss):
@@ -141,26 +138,32 @@ def evaluate(model, dataset, collator, opt):
     return loss, inversions, avg_topk, idx_topk
 
 if __name__ == "__main__":
-    options = Options(option_type='retriever')
+    options = Options()
     options.add_retriever_options()
     options.add_optim_options()
     opt = options.parse()
     torch.manual_seed(opt.seed)
     slurm.init_distributed_mode(opt)
     slurm.init_signal_handler()
-    opt.train_batch_size = opt.per_gpu_batch_size * max(1, opt.world_size)
-    logger.info("Distributed training")
 
     dir_path = Path(opt.checkpoint_dir)/opt.name
+    directory_exists = dir_path.exists()
+    if opt.is_distributed:
+        torch.distributed.barrier()
+    dir_path.mkdir(parents=True, exist_ok=True)
+    if not directory_exists and opt.is_main:
+        options.print_options(opt)
 
+    logger = util.init_logger(opt.is_main, opt.is_distributed, Path(opt.checkpoint_dir) / opt.name / 'run.log')
+    opt.train_batch_size = opt.per_gpu_batch_size * max(1, opt.world_size)
+
+    #Load data
     tokenizer = transformers.BertTokenizerFast.from_pretrained('bert-base-uncased')
-
     collator_function = retriever.data.Collator(
         tokenizer, 
         passage_maxlength=opt.passage_maxlength, 
         question_maxlength=opt.question_maxlength
     )
-
     train_examples = retriever.data.load_data(opt.train_data, maxload=opt.maxload)
     train_dataset = retriever.data.Dataset(train_examples, opt.n_context)
     eval_examples = retriever.data.load_data(
@@ -173,13 +176,6 @@ if __name__ == "__main__":
     logger.info(f"Number of examples in train set: {len(train_dataset)}.")
     logger.info(f"Number of examples in eval set: {len(eval_dataset)}.")
 
-    directory_exists = dir_path.exists()
-    if opt.is_distributed:
-        torch.distributed.barrier()
-    dir_path.mkdir(parents=True, exist_ok=True)
-    if not directory_exists and opt.is_main:
-        options.print_options(opt)
-    util.init_logger(opt)
 
     global_step = 0
     best_eval_loss = np.inf

@@ -19,7 +19,6 @@ from torch.utils.data import DataLoader, SequentialSampler
 import reader.evaluation
 import reader.model
 import types
-logger = logging.getLogger(__name__)
 
 def evaluate(model, dataset, dataloader, tokenizer, opt):
     loss, curr_loss = 0.0, 0.0
@@ -89,9 +88,18 @@ if __name__ == "__main__":
     slurm.init_distributed_mode(opt)
     slurm.init_signal_handler()
     opt.train_batch_size = opt.per_gpu_batch_size * max(1, opt.world_size)
-    logger.info("Distributed training")
 
     dir_path = Path(opt.checkpoint_dir)/opt.name
+    directory_exists = dir_path.exists()
+    if opt.is_distributed:
+        torch.distributed.barrier()
+    dir_path.mkdir(parents=True, exist_ok=True)
+    if opt.write_results:
+        (dir_path / 'test_results').mkdir(parents=True, exist_ok=True)
+    if not directory_exists and opt.is_main:
+        options.print_options(opt)
+    logger = util.init_logger(opt.is_main, opt.is_distributed, Path(opt.checkpoint_dir) / opt.name / 'run.log')
+
 
     model_class = reader.model.FiDT5
     tokenizer = transformers.T5Tokenizer.from_pretrained('t5-base', return_dict=False)
@@ -118,17 +126,7 @@ if __name__ == "__main__":
         num_workers=20, 
         collate_fn=collator_function
     )
-
-    directory_exists = dir_path.exists()
-    if opt.is_distributed:
-        torch.distributed.barrier()
-    dir_path.mkdir(parents=True, exist_ok=True)
-    if opt.write_results:
-        (dir_path / 'test_results').mkdir(parents=True, exist_ok=True)
-    if not directory_exists and opt.is_main:
-        options.print_options(opt)
-    util.init_logger(opt)
-
+    
     model = model_class.from_pretrained(opt.model_path)
     model.wrap_encoder()
     model = model.to(opt.device)

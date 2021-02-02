@@ -46,11 +46,7 @@ logger = logging.getLogger(__name__)
 
 QAMatchStats = collections.namedtuple('QAMatchStats', ['top_k_hits', 'questions_doc_hits'])
 
-def calculate_matches(all_docs: Dict[object, Tuple[str, str]],
-                      answers: List[List[str]],
-                      closest_docs: List[Tuple[List[object], List[float]]],
-                      workers_num: int,
-                      match_type: str) -> QAMatchStats:
+def calculate_matches(data: List, workers_num: int):
     """
     Evaluates answers presence in the set of documents. This function is supposed to be used with a large collection of
     documents and results. It internally forks multiple sub-processes for evaluation and then merges results
@@ -64,22 +60,18 @@ def calculate_matches(all_docs: Dict[object, Tuple[str, str]],
     valid matches across an entire dataset.
     questions_doc_hits - more detailed info with answer matches for every question and every retrieved document
     """
-    global dpr_all_documents
-    dpr_all_documents = all_docs
 
     logger.info('Matching answers in top docs...')
 
     tokenizer = SimpleTokenizer()
     get_score_partial = partial(check_answer, tokenizer=tokenizer)
 
-    answers_docs = zip(answers, closest_docs)
-
     processes = ProcessPool(processes=workers_num)
-    scores = processes.map(get_score_partial, answers_docs)
+    scores = processes.map(get_score_partial, data)
 
     logger.info('Per question validation results len=%d', len(scores))
 
-    n_docs = len(closest_docs[0][0])
+    n_docs = len(data[0]['ctxs'])
     top_k_hits = [0] * n_docs
     for question_hits in scores:
         best_hit = next((i for i, x in enumerate(question_hits) if x), None)
@@ -89,15 +81,15 @@ def calculate_matches(all_docs: Dict[object, Tuple[str, str]],
     return QAMatchStats(top_k_hits, scores)
 
 
-def check_answer(answers_docs, tokenizer) -> List[bool]:
+def check_answer(example, tokenizer) -> List[bool]:
     """Search through all the top docs to see if they have any of the answers."""
-    answers, (doc_ids, doc_scores) = answers_docs
+    answers = example['answers']
+    ctxs = example['ctxs']
 
-    global dpr_all_documents
     hits = []
 
-    for doc_id in doc_ids:
-        text = dpr_all_documents[doc_id][0]
+    for i, doc in enumerate(ctxs):
+        text = doc['text']
 
         if text is None:  # cannot find the document for some reason
             logger.warning("no doc in db")

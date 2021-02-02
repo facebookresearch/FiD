@@ -80,7 +80,6 @@ def calculate_matches(data: List, workers_num: int):
 
     return QAMatchStats(top_k_hits, scores)
 
-
 def check_answer(example, tokenizer) -> List[bool]:
     """Search through all the top docs to see if they have any of the answers."""
     answers = example['answers']
@@ -103,13 +102,14 @@ def check_answer(example, tokenizer) -> List[bool]:
 def has_answer(answers, text, tokenizer) -> bool:
     """Check if a document contains an answer string."""
     text = _normalize(text)
-    text = ' '.join(tokenizer.tokenize(text, uncased=True))
+    text = tokenizer.tokenize(text, uncased=True)
 
     for answer in answers:
         answer = _normalize(answer)
-        answer = ' '.join(tokenizer.tokenize(answer, uncased=True))
-        if answer in text:
-            return True
+        answer = tokenizer.tokenize(answer, uncased=True)
+        for i in range(0, len(text) - len(answer) + 1):
+            if answer == text[i: i + len(answer)]:
+                return True
     return False
 
 #################################################

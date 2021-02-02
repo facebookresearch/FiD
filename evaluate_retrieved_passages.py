@@ -1,6 +1,6 @@
 # Copyright (c) Facebook, Inc. and its affiliates.
 # All rights reserved.
-# 
+#
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
@@ -28,7 +28,7 @@ def validate(data, workers_num):
     top_k_hits = match_stats.top_k_hits
 
     logger.info('Validation results: top k documents hits %s', top_k_hits)
-    top_k_hits = [v / len(data) for v in top_k_hits] 
+    top_k_hits = [v / len(data) for v in top_k_hits]
     logger.info('Validation results: top k documents hits accuracy %s', top_k_hits)
     return match_stats.questions_doc_hits
 

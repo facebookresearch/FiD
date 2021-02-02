@@ -1,3 +1,9 @@
+# Copyright (c) Facebook, Inc. and its affiliates.
+# All rights reserved.
+# 
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
 import torch
 import random
 import json
@@ -53,15 +59,11 @@ class Dataset(torch.utils.data.Dataset):
             'scores' : scores
         }
 
-    ## TODO(egrave): use python sort
     def sort_data(self):
         if self.n_context is None or not 'score' in self.data[0]['ctxs'][0]:
             return
         for ex in self.data:
-            scores = [ctx['score'] for ctx in ex['ctxs']]
-            idx = np.argsort(-np.array(scores))
-            ctxs = [ex['ctxs'][k] for k in idx]
-            ex['ctxs'] = ctxs
+            ex['ctxs'].sort(key=lambda x: x['score'], reverse=True)
 
     def get_example(self, index):
         return self.data[index]
@@ -81,7 +83,6 @@ def encode_passages(batch_text_passages, tokenizer, max_length):
 
     passage_ids = torch.cat(passage_ids, dim=0)
     passage_masks = torch.cat(passage_masks, dim=0)
-    # TODO(egrave): check .bool() is ok
     return passage_ids, passage_masks.bool()
 
 class Collator(object):

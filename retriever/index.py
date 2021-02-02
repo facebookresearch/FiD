@@ -15,8 +15,6 @@ from tqdm import tqdm
 
 logger = logging.getLogger()
 
-#faiss.omp_set_num_threads(30)
-
 class DenseIndexer(object):
 
     def __init__(self, buffer_size: int = 50000):
@@ -73,7 +71,7 @@ class DenseFlatIndexer(DenseIndexer):
 
     def __init__(self, vector_sz: int, n_centroids=None, buffer_size: int = 50000):
         super(DenseFlatIndexer, self).__init__(buffer_size=buffer_size)
-        if n_centroids is None:
+        if n_centroids is not None:
             self.index = faiss.IndexPQ(vector_sz, n_centroids, 8, faiss.METRIC_INNER_PRODUCT)
         else:
             self.index = faiss.IndexFlatIP(vector_sz)
@@ -81,6 +79,7 @@ class DenseFlatIndexer(DenseIndexer):
     def index_data(self, ids, embeddings):
         # indexing in batches is beneficial for many faiss index types
         self._update_id_mapping(ids)
+        embeddings = embeddings.astype('float32')
         if not self.index.is_trained:
             self.index.train(embeddings)
         self.index.add(embeddings)

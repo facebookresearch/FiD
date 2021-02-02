@@ -50,11 +50,7 @@ class Dataset(torch.utils.data.Dataset):
         if self.n_context is None or not 'score' in self.data[0]['ctxs'][0]:
             return
         for ex in self.data:
-            scores = [ctx['score'] for ctx in ex['ctxs']]
-            idx = np.argsort(-np.array(scores))
-            ctxs = [ex['ctxs'][k] for k in idx]
-            ex['ctxs'] = ctxs
-
+            ex['ctxs'].sort(key=lambda x: x['score'], reverse=True)
 
     def get_example(self, index):
         return self.data[index]

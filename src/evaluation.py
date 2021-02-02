@@ -127,6 +127,7 @@ def has_answer(answers, text, tokenizer) -> bool:
 def _normalize(text):
     return unicodedata.normalize('NFD', text)
 
+#Normalization from SQuAD evaluation script https://worksheets.codalab.org/rest/bundles/0x6b567e1cf2e041ec80d7098f031c5c9e/contents/blob/
 def normalize_answer(s):
     def remove_articles(text):
         return regex.sub(r'\b(a|an|the)\b', ' ', text)

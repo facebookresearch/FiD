@@ -28,7 +28,6 @@ class FiDT5(transformers.T5ForConditionalGeneration):
         """
         for mod in self.encoder.encoder.block:
             mod.use_checkpoint = use_checkpoint
-            mod.module.use_checkpoint = use_checkpoint
 
     def reset_score_storage(self):
         """

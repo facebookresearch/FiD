@@ -27,7 +27,8 @@ import retriever.index
 
 from torch.utils.data import DataLoader
 
-from retriever.qa_validation import calculate_matches
+#from retriever.qa_validation import calculate_matches
+from retriever.standout_validation import calculate_matches
 
 logger = logging.getLogger(__name__)
 
@@ -79,12 +80,21 @@ def index_encoded_data(index, vector_files, maxload=None):
 
 
 
-def validate(passages, data, result_ctx_ids, workers_num, match_type='string'):
-    match_stats = calculate_matches(passages, data, result_ctx_ids, workers_num, match_type)
+#def validate(passages, data, result_ctx_ids, workers_num, match_type='string'):
+#    match_stats = calculate_matches(passages, data, result_ctx_ids, workers_num, match_type)
+#    top_k_hits = match_stats.top_k_hits
+#
+#    logger.info('Validation results: top k documents hits %s', top_k_hits)
+#    top_k_hits = [v / len(result_ctx_ids) for v in top_k_hits]
+#    logger.info('Validation results: top k documents hits accuracy %s', top_k_hits)
+#    return match_stats.questions_doc_hits
+
+def validate(data, workers_num):
+    match_stats = calculate_matches(data, workers_num)
     top_k_hits = match_stats.top_k_hits
 
     logger.info('Validation results: top k documents hits %s', top_k_hits)
-    top_k_hits = [v / len(result_ctx_ids) for v in top_k_hits]
+    top_k_hits = [v / len(data) for v in top_k_hits] 
     logger.info('Validation results: top k documents hits accuracy %s', top_k_hits)
     return match_stats.questions_doc_hits
 
@@ -107,35 +117,35 @@ def load_passages(ctx_file, maxload=None):
     return docs
 
 
-def save_results(data, passages, top_passages_and_scores, per_question_hits, out_file):
-    # join passages text with the result ids, their questions and assigning has|no answer labels
+def add_passages(data, passages, top_passages_and_scores):
+    # add passages to original data
     merged_data = []
     assert len(data) == len(top_passages_and_scores)
     for i, d in enumerate(data):
         results_and_scores = top_passages_and_scores[i]
-        hits = per_question_hits[i]
         docs = [passages[doc_id] for doc_id in results_and_scores[0]]
         scores = [str(score) for score in results_and_scores[1]]
-        ctxs_num = len(hits)
+        ctxs_num = len(docs)
         d['ctxs'] =[
                 {
                     'id': results_and_scores[0][c],
                     'title': docs[c][1],
                     'text': docs[c][0],
                     'score': scores[c],
-                    'has_answer': hits[c],
                 } for c in range(ctxs_num)
             ] 
 
-    with open(out_file, "w") as writer:
-        writer.write(json.dumps(data, indent=4) + "\n")
-    logger.info('Saved results * scores  to %s', out_file)
+def add_hasanswer(data, hasanswer):
+    # add hasanswer to data
+    for i, ex in enumerate(data):
+        for k, d in enumerate(ex['ctxs']):
+            d['hasanswer'] = hasanswer[i][k]
 
 
 def main(opt):
     util.init_logger(is_main=True)
     tokenizer = transformers.BertTokenizerFast.from_pretrained('bert-base-uncased')
-    data = retriever.data.load_data(opt.data_path)
+    data = retriever.data.load_data(opt.data)
     model_class = retriever.model.Retriever
     model, _, _, _, _, _ = util.load(model_class, opt.model_path, opt)
 
@@ -173,23 +183,24 @@ def main(opt):
     top_ids_and_scores = index.search_knn(questions_embedding, args.top_docs) 
     logger.info(f'Search time: {time.time()-start_time_retrieval:.1f} s.')
 
-    all_passages = load_passages(args.passages_path, maxload=args.maxload)
+    all_passages = load_passages(args.passages, maxload=args.maxload)
 
-    if len(all_passages) == 0:
-        raise RuntimeError('No passages data found. Please specify ctx_file param properly.')
-
-
-    answers = [ex['answers'] for ex in data]
-    questions_doc_hits = validate(all_passages, answers, top_ids_and_scores, args.validation_workers)
-    save_results(data, all_passages, top_ids_and_scores, questions_doc_hits, args.output_path)
+    add_passages(data, all_passages, top_ids_and_scores)
+    #questions_doc_hits = validate(all_passages, answers, top_ids_and_scores, args.validation_workers)
+    hasanswer = validate(data, args.validation_workers)
+    add_hasanswer(data, hasanswer)
+    #save_results(data, all_passages, top_ids_and_scores, questions_doc_hits, args.output_path)
+    with open(args.output_path, 'w') as fout:
+        json.dump(data, fout, indent=4)
+    logger.info(f'Saved results to {args.output_path}')
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--data_path', required=True, type=str, default=None,
+    parser.add_argument('--data', required=True, type=str, default=None,
                         help="Question and answers file of the format: question \\t ['answer1','answer2', ...]")
-    parser.add_argument('--passages_path', required=True, type=str, default=None,
+    parser.add_argument('--passages', required=True, type=str, default=None,
                         help="All passages file in the tsv format: id \\t passage_text \\t title")
     parser.add_argument('--passages_embeddings_path', type=str, default=None,
                         help='Glob path to encoded passages (from generate_dense_embeddings tool)')

@@ -27,8 +27,7 @@ import retriever.index
 
 from torch.utils.data import DataLoader
 
-#from retriever.qa_validation import calculate_matches
-from retriever.standout_validation import calculate_matches
+from src.evaluation import calculate_matches
 
 logger = logging.getLogger(__name__)
 
@@ -78,16 +77,6 @@ def index_encoded_data(index, vector_files, maxload=None):
             break
     logger.info('Data indexing completed.')
 
-
-
-#def validate(passages, data, result_ctx_ids, workers_num, match_type='string'):
-#    match_stats = calculate_matches(passages, data, result_ctx_ids, workers_num, match_type)
-#    top_k_hits = match_stats.top_k_hits
-#
-#    logger.info('Validation results: top k documents hits %s', top_k_hits)
-#    top_k_hits = [v / len(result_ctx_ids) for v in top_k_hits]
-#    logger.info('Validation results: top k documents hits accuracy %s', top_k_hits)
-#    return match_stats.questions_doc_hits
 
 def validate(data, workers_num):
     match_stats = calculate_matches(data, workers_num)

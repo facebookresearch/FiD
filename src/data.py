@@ -1,6 +1,6 @@
 # Copyright (c) Facebook, Inc. and its affiliates.
 # All rights reserved.
-# 
+#
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
@@ -102,6 +102,7 @@ class Collator(object):
         )
         target_ids = target["input_ids"]
         target_mask = target["attention_mask"].bool()
+        target_ids = target_ids.masked_fill(~target_mask, -100)
 
         #text_passages = [ex['passages'] for ex in batch]
         def append_question(example):

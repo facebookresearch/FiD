@@ -185,7 +185,7 @@ def cross_attention_forward(
     return output
 
 
-class RetrieverConfig(BertConfig):
+class RetrieverConfig(transformers.BertConfig):
 
     def __init__(self,
                  indexing_dimension=768,
@@ -203,7 +203,7 @@ class RetrieverConfig(BertConfig):
         self.question_maxlength = question_maxlength
         self.projection = projection
 
-class Retriever(PreTrainedModel):
+class Retriever(transformers.PreTrainedModel):
 
     config_class = RetrieverConfig
     base_model_prefix = "retriever"

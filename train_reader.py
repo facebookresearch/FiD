@@ -173,10 +173,9 @@ if __name__ == "__main__":
     best_dev_em = 0.
 
     if not directory_exists and opt.model_path == "none":
-        t5 = transformers.T5ForConditionalGeneration.from_pretrained('t5-base')
-        model = reader.model.FiDT5.from_pretrained(model_name)
-        model.load_state_dict(t5.state_dict())
-        model.wrap_encoder(use_checkpoint=opt.use_checkpoint)
+        t5 = transformers.T5ForConditionalGeneration.from_pretrained(model_name)
+        model = reader.model.FiDT5(t5.config)
+        model.load_t5(t5.state_dict())
         model = model.to(opt.local_rank)
         optimizer, scheduler = util.set_optim(opt, model)
     elif opt.model_path == "none":
@@ -184,14 +183,14 @@ if __name__ == "__main__":
         model, optimizer, scheduler, opt_checkpoint, step, best_dev_em = util.load(
             model_class, load_path, opt, reset_params=False
         )
-        model.wrap_encoder(use_checkpoint=opt.use_checkpoint)
         logger.info(f"Model loaded from {load_path}")
     else:
         model, optimizer, scheduler, opt_checkpoint, step, best_dev_em = util.load(
             model_class, opt.model_path, opt, reset_params=True,
         )
-        model.wrap_encoder(use_checkpoint=opt.use_checkpoint)
         logger.info(f"Model loaded from {opt.model_path}") 
+
+    model.set_checkpoint(opt.use_checkpoint)
 
 
     if opt.is_distributed:

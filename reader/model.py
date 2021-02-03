@@ -15,12 +15,29 @@ from torch.nn import CrossEntropyLoss
 class FiDT5(transformers.T5ForConditionalGeneration):
     def __init__(self, config):
         super().__init__(config)
+        self.wrap_encoder()
+
+    def load_t5(self, state_dict):
+        self.unwrap_encoder()
+        self.load_state_dict(state_dict)
+        self.wrap_encoder()
 
     def wrap_encoder(self, use_checkpoint=False):
         """
         Wrap T5 encoder to obtain a Fusion-in-Decoder model.
         """
         self.encoder = EncoderWrapper(self.encoder, use_checkpoint=use_checkpoint)
+
+    def unwrap_encoder(self):
+        """
+        Unwrap Fusion-in-Decoder encoder, useful to load T5 weights.
+        """
+        self.encoder = self.encoder.encoder
+        block = []
+        for mod in self.encoder.block:
+            block.append(mod.module)
+        block = nn.ModuleList(block)
+        self.encoder.block = block
 
     def set_checkpoint(self, use_checkpoint):
         """

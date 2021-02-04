@@ -25,18 +25,17 @@ class Dataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.data)
 
-    # TODO(egrave): space before EOS ?
     def get_target(self, example):
         if 'target' in example:
-            return example['target'] + '</s>'
+            return example['target'] + ' </s>'
         elif 'answers' in example:
-            return random.choice(example['answers']) + '</s>'
+            return random.choice(example['answers']) + ' </s>'
         else:
             return None
 
     def __getitem__(self, index):
         example = self.data[index]
-        question = self.question_prefix + example['question']
+        question = self.question_prefix + " " + example['question']
         target = self.get_target(example)
 
         if 'ctxs' in example and self.n_context is not None:
@@ -169,7 +168,7 @@ class RetrieverCollator(object):
         passage_ids, passage_masks = encode_passages(
             passages,
             self.tokenizer,
-            self.passage_max_length
+            self.passage_maxlength
         )
 
         return (index, question_ids, question_mask, passage_ids, passage_masks, scores)

@@ -101,7 +101,6 @@ if __name__ == "__main__":
     logger = util.init_logger(opt.is_main, opt.is_distributed, Path(opt.checkpoint_dir) / opt.name / 'run.log')
 
 
-    model_class = reader.model.FiDT5
     tokenizer = transformers.T5Tokenizer.from_pretrained('t5-base', return_dict=False)
 
     collator_function = reader.data.Collator(opt.text_maxlength, tokenizer)
@@ -127,8 +126,8 @@ if __name__ == "__main__":
         collate_fn=collator_function
     )
     
+    model_class = reader.model.FiDT5
     model = model_class.from_pretrained(opt.model_path)
-    model.wrap_encoder()
     model = model.to(opt.device)
 
     logger.info("Start eval")

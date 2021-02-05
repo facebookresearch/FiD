@@ -107,7 +107,6 @@ class WarmupLinearScheduler(torch.optim.lr_scheduler.LambdaLR):
         )
 
 
-
 class FixedScheduler(torch.optim.lr_scheduler.LambdaLR):
     def __init__(self, optimizer, last_epoch=-1):
         super(FixedScheduler, self).__init__(optimizer, self.lr_lambda, last_epoch=last_epoch)
@@ -119,6 +118,7 @@ def set_dropout(model, dropout_rate):
     for mod in model.modules():
         if isinstance(mod, torch.nn.Dropout):
             mod.p = dropout_rate
+
 
 def set_optim(opt, model):
     if opt.optim == 'adam':
@@ -136,18 +136,6 @@ def set_optim(opt, model):
     return optimizer, scheduler
 
 
-def print_parameters(net, log_dir, verbose=False):
-    file_name = os.path.join(log_dir, "opt.txt")
-    num_params = 0
-    for param in net.parameters():
-        num_params += param.numel()
-    message = "[Network] Total number of parameters : %.6f M" % (num_params / 1e6)
-    print(message)
-    if verbose:
-        print(net)
-    sys.stdout.flush()
-
-
 def average_main(x, opt):
     if not opt.is_distributed:
         return x
@@ -157,6 +145,7 @@ def average_main(x, opt):
             x = x / opt.world_size
     return x
 
+
 def sum_main(x, opt):
     if not opt.is_distributed:
         return x
@@ -164,14 +153,16 @@ def sum_main(x, opt):
         dist.reduce(x, 0, op=dist.ReduceOp.SUM)
     return x
 
+
 def weighted_average(x, count, opt):
     if not opt.is_distributed:
         return x, count
-    t_loss = torch.tensor([x * count], device="cuda:"+str(opt.local_rank))
-    t_total = torch.tensor([count], device="cuda:"+str(opt.local_rank))
+    t_loss = torch.tensor([x * count], device=opt.device)
+    t_total = torch.tensor([count], device=opt.device)
     t_loss = sum_main(t_loss, opt)
     t_total = sum_main(t_total, opt)
     return (t_loss / t_total).item(), t_total.item()
+
 
 def write_output(glob_path, output_path):
     files = list(glob_path.glob('*.txt'))
@@ -184,6 +175,7 @@ def write_output(glob_path, output_path):
                     outfile.write(line)
             path.unlink()
     glob_path.rmdir()
+
 
 def save_distributed_dataset(data, opt):
     dir_path = Path(opt.checkpoint_dir) / opt.name

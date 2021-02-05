@@ -23,14 +23,7 @@ import slurm
 
 from torch.utils.data import DataLoader
 
-
-
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
-if (logger.hasHandlers()):
-    logger.handlers.clear()
-console = logging.StreamHandler()
-logger.addHandler(console)
+logger = logging.getLogger(__name__)
 
 def embed_passages(opt, passages, model, tokenizer):
     batch_size = opt.per_gpu_batch_size * opt.world_size
@@ -58,8 +51,22 @@ def embed_passages(opt, passages, model, tokenizer):
     allids = [x for idlist in allids for x in idlist]
     return allids, allembeddings
 
+def load_passages(args):
+    logger.info(f'Loading passages from: {args.passages}')
+    passages = []
+    with open(args.passages) as fin:
+        reader = csv.reader(fin, delimiter='\t')
+        for k, row in enumerate(reader):
+            if not row[0] == 'id':
+                try:
+                    passages.append((row[0], row[1], row[2]))
+                except:
+                    logger.warning(f'The following input line has not been correctly loaded: {row}')
+
+
 
 def main(opt):
+    logger = util.init_logger(is_main=True)
     tokenizer = transformers.BertTokenizerFast.from_pretrained('bert-base-uncased')
     model_class = retriever.model.Retriever
     model, _, _, _, _, _ = util.load(model_class, opt.model_path, opt)
@@ -68,19 +75,8 @@ def main(opt):
     model = model.to(opt.device)
     if not opt.no_fp16:
         model = model.half()
-    if opt.world_size > 1 and opt.local_rank == -1:
-        model = torch.nn.DataParallel(model)
 
-    logger.info(f'Passage file: {args.passages}')
-    passages = []
-    with open(args.passages) as tsvfile:
-        reader = csv.reader(tsvfile, delimiter='\t')
-        for k, row in enumerate(reader):
-            if not row[0] == 'id':
-                try:
-                    passages.append((row[0], row[1], row[2]))
-                except:
-                    logger.warning(f'The following input line has not been correctly loaded: {row}')
+    passages = load_passages(args)
 
     shard_size = int(len(passages) / args.num_shards)
     start_idx = args.shard_id * shard_size
@@ -99,7 +95,7 @@ def main(opt):
     with open(file, mode='wb') as f:
         pickle.dump((allids, allembeddings), f)
 
-    logger.info(f'Total passages processed {len(allids)}. Written to {file}')
+    logger.info(f'Total passages processed {len(allids)}. Written to {file}.')
 
 
 if __name__ == '__main__':

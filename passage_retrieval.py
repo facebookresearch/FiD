@@ -175,10 +175,8 @@ def main(opt):
     all_passages = load_passages(args.passages, maxload=args.maxload)
 
     add_passages(data, all_passages, top_ids_and_scores)
-    #questions_doc_hits = validate(all_passages, answers, top_ids_and_scores, args.validation_workers)
     hasanswer = validate(data, args.validation_workers)
     add_hasanswer(data, hasanswer)
-    #save_results(data, all_passages, top_ids_and_scores, questions_doc_hits, args.output_path)
     with open(args.output_path, 'w') as fout:
         json.dump(data, fout, indent=4)
     logger.info(f'Saved results to {args.output_path}')

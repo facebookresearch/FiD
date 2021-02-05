@@ -13,7 +13,6 @@ import torch
 
 import util
 
-from retriever.standout_validation import calculate_matches
 from src.evaluation import calculate_matches
 
 logger = logging.getLogger(__name__)

@@ -14,13 +14,14 @@ import util
 import numpy as np
 from options import Options
 from torch.utils.data import DataLoader, RandomSampler, DistributedSampler, SequentialSampler
+import options
 import src.evaluation
 import src.data
 import src.model
 from pathlib import Path
 
 
-def train(model, optimizer, scheduler, step, train_dataset, eval_dataset, opt, collator, best_dev_em):
+def train(model, optimizer, scheduler, step, train_dataset, eval_dataset, opt, collator, best_dev_em, checkpoint_path):
 
     #if opt.is_main:
     #    tb_logger = torch.utils.tensorboard.SummaryWriter(Path(opt.checkpoint_dir)/opt.name)
@@ -47,18 +48,18 @@ def train(model, optimizer, scheduler, step, train_dataset, eval_dataset, opt, c
             step += 1
             (idx, labels, _, context_ids, context_mask) = batch
             n_passages = context_ids.size(1)
-            if step % 10 != 0:
-                n_passages = 20
-            context_ids = context_ids[:, :n_passages, :]
-            context_mask = context_mask[:, :n_passages, :]
-            if hasattr(model, "module"):
-                model.module.encoder.n_passages = n_passages
-            else:
-                model.encoder.n_passages = n_passages
+            #if step % 10 != 0:
+            #    n_passages = 20
+            #context_ids = context_ids[:, :n_passages, :]
+            #context_mask = context_mask[:, :n_passages, :]
+            #if hasattr(model, "module"):
+            #    model.module.encoder.n_passages = n_passages
+            #else:
+            #    model.encoder.n_passages = n_passages
 
             train_loss = model(
-                input_ids=context_ids.cuda().view(context_ids.size(0), -1),
-                attention_mask=context_mask.cuda().view(context_ids.size(0), -1),
+                input_ids=context_ids.cuda(), #.view(context_ids.size(0), -1),
+                attention_mask=context_mask.cuda(), #.view(context_ids.size(0), -1),
                 labels=labels.cuda()
             )[0]
 
@@ -80,7 +81,8 @@ def train(model, optimizer, scheduler, step, train_dataset, eval_dataset, opt, c
                     #tb_logger.add_scalar("Evaluation", dev_em, step)
                     if dev_em > best_dev_em:
                         best_dev_em = dev_em
-                        util.save(model, optimizer, scheduler, step, best_dev_em, opt, dir_path, 'best_dev')
+                        util.save(model, optimizer, scheduler, step, best_dev_em,
+                                  opt, checkpoint_path, 'best_dev')
                     log = f"{step} / {opt.total_steps} |"
                     log += f"train: {curr_loss/opt.eval_freq:.3f} |"
                     log += f"evaluation: {100*dev_em:.2f}EM |"
@@ -90,13 +92,12 @@ def train(model, optimizer, scheduler, step, train_dataset, eval_dataset, opt, c
                     curr_loss = 0
 
             if opt.is_main and step % opt.save_freq == 0:
-                util.save(model, optimizer, scheduler, step, best_dev_em, opt, dir_path, f"step-{step}")
+                util.save(model, optimizer, scheduler, step, best_dev_em,
+                          opt, checkpoint_path, f"step-{step}")
             if step > opt.total_steps:
                 break
 
-
 def evaluate(model, dataset, tokenizer, collator, opt):
-
     sampler = SequentialSampler(dataset)
     dataloader = DataLoader(dataset,
         sampler=sampler,
@@ -112,11 +113,11 @@ def evaluate(model, dataset, tokenizer, collator, opt):
     with torch.no_grad():
         for i, batch in enumerate(dataloader):
             (idx, _, _, context_ids, context_mask) = batch
-            model.encoder.n_passages = context_ids.size(1)
+            #model.encoder.n_passages = context_ids.size(1)
 
             outputs = model.generate(
-                input_ids=context_ids.cuda().view(context_ids.size(0), -1),
-                attention_mask=context_mask.cuda().view(context_mask.size(0), -1),
+                input_ids=context_ids.cuda(), #.view(context_ids.size(0), -1),
+                attention_mask=context_mask.cuda(), #.view(context_mask.size(0), -1),
                 max_length=50
             )
 
@@ -130,26 +131,25 @@ def evaluate(model, dataset, tokenizer, collator, opt):
     exactmatch, total = util.weighted_average(np.mean(exactmatch), total, opt)
     return exactmatch
 
-
 if __name__ == "__main__":
-    #options = Options()
-    #options.add_reader_options()
-    #options.add_optim_options()
-    #opt = options.parse()
-    opt = options.get_options(use_reader=True, use_optim=True)
+    options = Options()
+    options.add_reader_options()
+    options.add_optim_options()
+    opt = options.parse()
+    #opt = options.get_options(use_reader=True, use_optim=True)
 
     torch.manual_seed(opt.seed)
     slurm.init_distributed_mode(opt)
     slurm.init_signal_handler()
 
-    #checkpoint_path = Path(opt.checkpoint_dir)/opt.name
-    #checkpoint_exists = checkpoint_path.exists()
-    #if opt.is_distributed:
-    #    torch.distributed.barrier()
-    #checkpoint_path.mkdir(parents=True, exist_ok=True)
+    checkpoint_path = Path(opt.checkpoint_dir)/opt.name
+    checkpoint_exists = checkpoint_path.exists()
+    if opt.is_distributed:
+        torch.distributed.barrier()
+    checkpoint_path.mkdir(parents=True, exist_ok=True)
     #if not checkpoint_exists and opt.is_main:
     #    options.print_options(opt)
-    checkpoint_path, checkpoint_exists = get_checkpoint_path(opt)
+    #checkpoint_path, checkpoint_exists = util.get_checkpoint_path(opt)
 
     logger = util.init_logger(
         opt.is_main,
@@ -175,15 +175,13 @@ if __name__ == "__main__":
     )
     eval_dataset = src.data.Dataset(eval_examples, opt.n_context)
 
-    step = 0
-    best_dev_em = 0.0
-
     if not checkpoint_exists and opt.model_path == "none":
         t5 = transformers.T5ForConditionalGeneration.from_pretrained(model_name)
         model = src.model.FiDT5(t5.config)
         model.load_t5(t5.state_dict())
         model = model.to(opt.local_rank)
         optimizer, scheduler = util.set_optim(opt, model)
+        step, best_dev_em = 0, 0.0
     elif opt.model_path == "none":
         load_path = checkpoint_path / 'checkpoint' / 'latest'
         model, optimizer, scheduler, opt_checkpoint, step, best_dev_em = \
@@ -214,5 +212,6 @@ if __name__ == "__main__":
         eval_dataset,
         opt,
         collator,
-        best_dev_em
+        best_dev_em,
+        checkpoint_path
     )

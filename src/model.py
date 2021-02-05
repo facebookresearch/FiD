@@ -17,6 +17,33 @@ class FiDT5(transformers.T5ForConditionalGeneration):
         super().__init__(config)
         self.wrap_encoder()
 
+    def forward(self, input_ids=None, attention_mask=None, **kwargs):
+        """
+        input_ids and attention_mask are of dimension:
+            batch_size x n_passage x passage_length
+        and are resized to a 2D tensor of dimension:
+            batch_size x (n_passage x passage_length)
+        The encoder wrapper then resizes the input to
+            (batch_size x n_passage) x passage_length.
+        """
+        if input_ids != None:
+            self.encoder.n_passages = input_ids.size(1)
+            return super().forward(
+                input_ids=input_ids.view(input_ids.size(0), -1),
+                attention_mask=attention_mask.view(input_ids.size(0), -1),
+                **kwargs
+            )
+        else:
+            return super().forward(**kwargs)
+
+    def generate(self, input_ids, attention_mask, max_length):
+        self.encoder.n_passages = input_ids.size(1)
+        return super().generate(
+            input_ids=input_ids.view(input_ids.size(0), -1),
+            attention_mask=attention_mask.view(attention_mask.size(0), -1),
+            max_length=max_length
+        )
+
     def wrap_encoder(self, use_checkpoint=False):
         """
         Wrap T5 encoder to obtain a Fusion-in-Decoder model.

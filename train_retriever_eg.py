@@ -17,6 +17,7 @@ import torch.distributed as dist
 from options import Options
 from torch.utils.data import DataLoader, RandomSampler, DistributedSampler, SequentialSampler
 import src.evaluation
+import retriever.data
 import src.data
 import src.model
 from pathlib import Path
@@ -165,14 +166,14 @@ if __name__ == "__main__":
         question_maxlength=opt.question_maxlength
     )
     train_examples = src.data.load_data(opt.train_data, maxload=opt.maxload)
-    train_dataset = src.data.Dataset(train_examples, opt.n_context)
+    train_dataset = retriever.data.Dataset(train_examples, opt.n_context)
     eval_examples = src.data.load_data(
         opt.eval_data,
         global_rank=opt.global_rank,
         world_size=opt.world_size,
         maxload=opt.maxload
     ) #use the global rank and world size attibutes to split the dev set on multiple gpus
-    eval_dataset = src.data.Dataset(eval_examples, opt.n_context)
+    eval_dataset = retriever.data.Dataset(eval_examples, opt.n_context)
     logger.info(f"Number of examples in train set: {len(train_dataset)}.")
     logger.info(f"Number of examples in eval set: {len(eval_dataset)}.")
 

@@ -21,6 +21,7 @@ class Dataset(torch.utils.data.Dataset):
         self.question_prefix = question_prefix
         self.title_prefix = title_prefix
         self.passage_prefix = passage_prefix
+        self.sort_data()
 
     def __len__(self):
         return len(self.data)

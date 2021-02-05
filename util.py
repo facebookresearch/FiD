@@ -37,8 +37,6 @@ def get_checkpoint_path(opt):
     if opt.is_distributed:
         torch.distributed.barrier()
     checkpoint_path.mkdir(parents=True, exist_ok=True)
-    if not checkpoint_exists and opt.is_main:
-        options.print_options(opt)
     return checkpoint_path, checkpoint_exists
 
 def symlink_force(target, link_name):

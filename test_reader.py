@@ -4,7 +4,6 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-import sys
 import torch
 import transformers
 import slurm
@@ -18,7 +17,6 @@ from options import Options
 from torch.utils.data import DataLoader, SequentialSampler
 import reader.evaluation
 import reader.model
-import types
 
 def evaluate(model, dataset, dataloader, tokenizer, opt):
     loss, curr_loss = 0.0, 0.0
@@ -96,9 +94,9 @@ if __name__ == "__main__":
     dir_path.mkdir(parents=True, exist_ok=True)
     if opt.write_results:
         (dir_path / 'test_results').mkdir(parents=True, exist_ok=True)
+    logger = util.init_logger(opt.is_main, opt.is_distributed, Path(opt.checkpoint_dir) / opt.name / 'run.log')
     if not directory_exists and opt.is_main:
         options.print_options(opt)
-    logger = util.init_logger(opt.is_main, opt.is_distributed, Path(opt.checkpoint_dir) / opt.name / 'run.log')
 
 
     tokenizer = transformers.T5Tokenizer.from_pretrained('t5-base', return_dict=False)

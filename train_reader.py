@@ -137,9 +137,9 @@ if __name__ == "__main__":
     if opt.is_distributed:
         torch.distributed.barrier()
     dir_path.mkdir(parents=True, exist_ok=True)
+    logger = util.init_logger(opt.is_main, opt.is_distributed, Path(opt.checkpoint_dir) / opt.name / 'run.log')
     if not directory_exists and opt.is_main:
         options.print_options(opt)
-    logger = util.init_logger(opt.is_main, opt.is_distributed, Path(opt.checkpoint_dir) / opt.name / 'run.log')
 
 
     model_name = 't5-' + opt.model_size

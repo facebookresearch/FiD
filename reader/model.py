@@ -17,6 +17,25 @@ class FiDT5(transformers.T5ForConditionalGeneration):
         super().__init__(config)
         self.wrap_encoder()
 
+    def forward(self, **kwargs):
+        if 'input_ids' in kwargs:
+            kwargs['input_ids'] = kwargs['input_ids'].view(kwargs['input_ids'].size(0), -1)
+        if 'attention_mask' in kwargs:
+            kwargs['attention_mask'] = kwargs['attention_mask'].view(kwargs['attention_mask'].size(0), -1)
+
+        return super(FiDT5, self).forward(
+            **kwargs
+        )
+
+    def generate(self, input_ids, attention_mask, max_length):
+        input_ids=input_ids.view(input_ids.size(0), -1)
+        attention_mask=attention_mask.view(attention_mask.size(0), -1)
+        return super(FiDT5, self).generate(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            max_length=max_length
+        )
+
     def load_t5(self, state_dict):
         self.unwrap_encoder()
         self.load_state_dict(state_dict)

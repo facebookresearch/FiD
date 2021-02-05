@@ -47,9 +47,9 @@ def train(model, optimizer, scheduler, step, train_dataset, eval_dataset, opt, c
             else:
                 model.encoder.n_passages = n_passages
 
-            train_loss = model(
-                input_ids=context_ids.cuda().view(context_ids.size(0), -1),
-                attention_mask=context_mask.cuda().view(context_ids.size(0), -1),
+            train_loss = model.forward(
+                input_ids=context_ids.cuda(), #.view(context_ids.size(0), -1),
+                attention_mask=context_mask.cuda(), #.view(context_ids.size(0), -1),
                 labels=labels.cuda()
             )[0]
 
@@ -106,8 +106,8 @@ def evaluate(model, dataset, tokenizer, collator, opt):
             model.encoder.n_passages = context_ids.size(1)
 
             outputs = model.generate(
-                input_ids=context_ids.cuda().view(context_ids.size(0), -1), 
-                attention_mask=context_mask.cuda().view(context_mask.size(0), -1), 
+                input_ids=context_ids.cuda(), #.view(context_ids.size(0), -1), 
+                attention_mask=context_mask.cuda(), #.view(context_mask.size(0), -1), 
                 max_length=50
             )
 

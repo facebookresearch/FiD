@@ -89,13 +89,14 @@ def main(opt):
 
     allids, allembeddings = embed_passages(opt, passages, model, tokenizer)
 
-    file = args.output_path + '_' + str('{0:02d}'.format(args.shard_id))
-    pathlib.Path(os.path.dirname(file)).mkdir(parents=True, exist_ok=True)
-    logger.info(f'Saving {len(allids)} passage embeddings to {file}')
-    with open(file, mode='wb') as f:
+    output_path = Path(args.output_path)
+    save_file = args.output_path.parent / (output_path.name + f'{args.shard_id:02d}')
+    output_path.parent.mkdir(parents=True, exists_ok=True) 
+    logger.info(f'Saving {len(allids)} passage embeddings to {save_file}')
+    with open(save_file, mode='wb') as f:
         pickle.dump((allids, allembeddings), f)
 
-    logger.info(f'Total passages processed {len(allids)}. Written to {file}.')
+    logger.info(f'Total passages processed {len(allids)}. Written to {save_file}.')
 
 
 if __name__ == '__main__':

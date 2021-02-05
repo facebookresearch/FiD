@@ -5,21 +5,15 @@
 # LICENSE file in the root directory of this source tree.
 
 import argparse
-import os
-import csv
 import json
-import sys
 import logging
-import pickle
-import time
 
 import numpy as np
 import torch
 
 import util
 
-from retriever.standout_validation import calculate_matches
-#from src.evaluation import calculate_matches
+from src.evaluation import calculate_matches
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +28,7 @@ def validate(data, workers_num):
 
 
 def main(opt):
-    util.init_logger(is_main=True)
+    logger = util.init_logger(is_main=True)
     with open(opt.data, 'r') as fin:
         data = json.load(fin)
     answers = [ex['answers'] for ex in data]

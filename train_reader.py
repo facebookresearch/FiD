@@ -47,9 +47,9 @@ def train(model, optimizer, scheduler, step, train_dataset, eval_dataset, opt, c
             else:
                 model.encoder.n_passages = n_passages
 
-            train_loss = model(
-                input_ids=context_ids.cuda().view(context_ids.size(0), -1),
-                attention_mask=context_mask.cuda().view(context_ids.size(0), -1),
+            train_loss = model.forward(
+                input_ids=context_ids.cuda(),
+                attention_mask=context_mask.cuda(),
                 labels=labels.cuda()
             )[0]
 
@@ -106,8 +106,8 @@ def evaluate(model, dataset, tokenizer, collator, opt):
             model.encoder.n_passages = context_ids.size(1)
 
             outputs = model.generate(
-                input_ids=context_ids.cuda().view(context_ids.size(0), -1), 
-                attention_mask=context_mask.cuda().view(context_mask.size(0), -1), 
+                input_ids=context_ids.cuda(),
+                attention_mask=context_mask.cuda(),
                 max_length=50
             )
 
@@ -137,9 +137,9 @@ if __name__ == "__main__":
     if opt.is_distributed:
         torch.distributed.barrier()
     dir_path.mkdir(parents=True, exist_ok=True)
+    logger = util.init_logger(opt.is_main, opt.is_distributed, Path(opt.checkpoint_dir) / opt.name / 'run.log')
     if not directory_exists and opt.is_main:
         options.print_options(opt)
-    logger = util.init_logger(opt.is_main, opt.is_distributed, Path(opt.checkpoint_dir) / opt.name / 'run.log')
 
 
     model_name = 't5-' + opt.model_size
@@ -173,10 +173,9 @@ if __name__ == "__main__":
     best_dev_em = 0.
 
     if not directory_exists and opt.model_path == "none":
-        t5 = transformers.T5ForConditionalGeneration.from_pretrained('t5-base')
-        model = reader.model.FiDT5.from_pretrained(model_name)
-        model.load_state_dict(t5.state_dict())
-        model.wrap_encoder(use_checkpoint=opt.use_checkpoint)
+        t5 = transformers.T5ForConditionalGeneration.from_pretrained(model_name)
+        model = reader.model.FiDT5(t5.config)
+        model.load_t5(t5.state_dict())
         model = model.to(opt.local_rank)
         optimizer, scheduler = util.set_optim(opt, model)
     elif opt.model_path == "none":
@@ -184,14 +183,14 @@ if __name__ == "__main__":
         model, optimizer, scheduler, opt_checkpoint, step, best_dev_em = util.load(
             model_class, load_path, opt, reset_params=False
         )
-        model.wrap_encoder(use_checkpoint=opt.use_checkpoint)
         logger.info(f"Model loaded from {load_path}")
     else:
         model, optimizer, scheduler, opt_checkpoint, step, best_dev_em = util.load(
             model_class, opt.model_path, opt, reset_params=True,
         )
-        model.wrap_encoder(use_checkpoint=opt.use_checkpoint)
         logger.info(f"Model loaded from {opt.model_path}") 
+
+    model.set_checkpoint(opt.use_checkpoint)
 
 
     if opt.is_distributed:

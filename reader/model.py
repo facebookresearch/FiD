@@ -15,12 +15,48 @@ from torch.nn import CrossEntropyLoss
 class FiDT5(transformers.T5ForConditionalGeneration):
     def __init__(self, config):
         super().__init__(config)
+        self.wrap_encoder()
+
+    def forward(self, **kwargs):
+        if 'input_ids' in kwargs:
+            kwargs['input_ids'] = kwargs['input_ids'].view(kwargs['input_ids'].size(0), -1)
+        if 'attention_mask' in kwargs:
+            kwargs['attention_mask'] = kwargs['attention_mask'].view(kwargs['attention_mask'].size(0), -1)
+
+        return super(FiDT5, self).forward(
+            **kwargs
+        )
+
+    def generate(self, input_ids, attention_mask, max_length):
+        input_ids=input_ids.view(input_ids.size(0), -1)
+        attention_mask=attention_mask.view(attention_mask.size(0), -1)
+        return super(FiDT5, self).generate(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            max_length=max_length
+        )
+
+    def load_t5(self, state_dict):
+        self.unwrap_encoder()
+        self.load_state_dict(state_dict)
+        self.wrap_encoder()
 
     def wrap_encoder(self, use_checkpoint=False):
         """
         Wrap T5 encoder to obtain a Fusion-in-Decoder model.
         """
         self.encoder = EncoderWrapper(self.encoder, use_checkpoint=use_checkpoint)
+
+    def unwrap_encoder(self):
+        """
+        Unwrap Fusion-in-Decoder encoder, useful to load T5 weights.
+        """
+        self.encoder = self.encoder.encoder
+        block = []
+        for mod in self.encoder.block:
+            block.append(mod.module)
+        block = nn.ModuleList(block)
+        self.encoder.block = block
 
     def set_checkpoint(self, use_checkpoint):
         """

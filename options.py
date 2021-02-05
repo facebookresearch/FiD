@@ -7,7 +7,9 @@
 import argparse
 import os
 from pathlib import Path
+import logging
 
+logger = logging.getLogger(__name__)
 
 class Options():
     def __init__(self):
@@ -78,25 +80,24 @@ class Options():
 
 
     def print_options(self, opt):
-        message = ''
+        message = '\n'
         for k, v in sorted(vars(opt).items()):
             comment = ''
-            default = self.parser.get_default(k)
-            if v != default:
-                comment = '\t[default: %s]' % str(default)
-            message += '{:>40}: {:<40}{}\n'.format(str(k), str(v), comment)
+            default_value = self.parser.get_default(k)
+            if v != default_value:
+                comment = f'\t(default: {default_value})'
+            message += f'{str(k):>30}: {str(v):<40}{comment}\n'
 
-        expr_dir = os.path.join(opt.checkpoint_dir, opt.name)
-        model_dir = os.path.join(expr_dir, 'models')
-        if not os.path.exists(model_dir):
-            os.makedirs(os.path.join(expr_dir, 'models'), exist_ok=True)
-        file_name = os.path.join(expr_dir, 'opt.txt')
-        with open(file_name, 'wt') as opt_file:
+        expr_dir = Path(opt.checkpoint_dir)/ opt.name
+        model_dir = expr_dir / 'models'
+        model_dir.mkdir(parents=True, exist_ok=True)
+        with open(expr_dir/'opt.log', 'wt') as opt_file:
             opt_file.write(message)
             opt_file.write('\n')
 
+        logger.info(message)
+
     def parse(self):
-        opt, _ = self.parser.parse_known_args()
         opt = self.parser.parse_args()
         return opt
 

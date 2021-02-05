@@ -5,21 +5,19 @@
 # LICENSE file in the root directory of this source tree.
 
 import argparse
-import os
 import csv
 import json
-import sys
 import logging
 import pickle
 import time
+import glob
+from pathlib import Path
 
 import numpy as np
 import torch
 import transformers
 
 import slurm
-import glob
-
 import util
 import retriever.data
 import retriever.model
@@ -27,8 +25,7 @@ import retriever.index
 
 from torch.utils.data import DataLoader
 
-#from retriever.qa_validation import calculate_matches
-from retriever.standout_validation import calculate_matches
+from src.evaluation import calculate_matches
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +47,7 @@ def embed_questions(opt, data, model, tokenizer):
             embedding.append(output)
 
     embedding = torch.cat(embedding, dim=0)
-    logger.info(f'Shape of question embeddings: {embedding.size()}')
+    logger.info(f'Questions embeddings shape: {embedding.size()}')
 
     return embedding.cpu().numpy()
 
@@ -69,7 +66,6 @@ def index_encoded_data(index, vector_files, maxload=None):
     for i, file_path in enumerate(vector_files):
         logger.info(f'Loading file {file_path}')
         with open(file_path, 'rb') as fin:
-            #ids, embeddings = torch.load(fin)
             ids, embeddings = pickle.load(fin)
 
         index.index_data(ids, embeddings)
@@ -78,16 +74,6 @@ def index_encoded_data(index, vector_files, maxload=None):
             break
     logger.info('Data indexing completed.')
 
-
-
-#def validate(passages, data, result_ctx_ids, workers_num, match_type='string'):
-#    match_stats = calculate_matches(passages, data, result_ctx_ids, workers_num, match_type)
-#    top_k_hits = match_stats.top_k_hits
-#
-#    logger.info('Validation results: top k documents hits %s', top_k_hits)
-#    top_k_hits = [v / len(result_ctx_ids) for v in top_k_hits]
-#    logger.info('Validation results: top k documents hits accuracy %s', top_k_hits)
-#    return match_stats.questions_doc_hits
 
 def validate(data, workers_num):
     match_stats = calculate_matches(data, workers_num)
@@ -159,12 +145,10 @@ def main(opt):
     index = retriever.index.DenseFlatIndexer(model.config.indexing_dimension)
 
     # index all passages
-    input_paths = glob.glob(args.passages_embeddings_path)
+    input_paths = glob.glob(args.passages_embeddings)
     input_paths = sorted(input_paths)
-    #logger.info('Reading all passages data from files: %s', input_paths)
-    index_path = "_".join(input_paths[0].split("_")[:-1])
-    print(args.save_or_load_index, os.path.exists(index_path), index_path)
-    if args.save_or_load_index and os.path.exists(index_path+'.index.dpr'):
+    index_path = Path(input_paths[0]).parent / 'index.faiss'
+    if args.save_or_load_index and index_path.exists():
         retriever.index.deserialize_from(index_path)
     else:
         logger.info(f'Indexing passages from files {input_paths}')
@@ -173,23 +157,19 @@ def main(opt):
         logger.info(f'Indexing time: {time.time()-start_time_indexing:.1f} s.')
         if args.save_or_load_index:
             retriever.index.serialize(index_path)
-    # get questions & answers
 
     questions_embedding = embed_questions(opt, data, model, tokenizer)
 
     # get top k results
     start_time_retrieval = time.time()
-    nbatch = (len(questions_embedding)-1) // args.index_batch_size + 1
     top_ids_and_scores = index.search_knn(questions_embedding, args.top_docs) 
     logger.info(f'Search time: {time.time()-start_time_retrieval:.1f} s.')
 
-    all_passages = load_passages(args.passages, maxload=args.maxload)
+    passages = load_passages(args.passages, maxload=args.maxload)
 
-    add_passages(data, all_passages, top_ids_and_scores)
-    #questions_doc_hits = validate(all_passages, answers, top_ids_and_scores, args.validation_workers)
+    add_passages(data, passages, top_ids_and_scores)
     hasanswer = validate(data, args.validation_workers)
     add_hasanswer(data, hasanswer)
-    #save_results(data, all_passages, top_ids_and_scores, questions_doc_hits, args.output_path)
     with open(args.output_path, 'w') as fout:
         json.dump(data, fout, indent=4)
     logger.info(f'Saved results to {args.output_path}')
@@ -199,13 +179,12 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--data', required=True, type=str, default=None,
-                        help="Question and answers file of the format: question \\t ['answer1','answer2', ...]")
+                        help="Data file containing questions and answers")
     parser.add_argument('--passages', required=True, type=str, default=None,
                         help="All passages file in the tsv format: id \\t passage_text \\t title")
-    parser.add_argument('--passages_embeddings_path', type=str, default=None,
-                        help='Glob path to encoded passages (from generate_dense_embeddings tool)')
-    parser.add_argument('--output_path', type=str, default=None,
-                        help='output .tsv file path to write results to ')
+    parser.add_argument('--passages_embeddings', type=str, default=None,
+                        help='Glob path to encoded passages')
+    parser.add_argument('--output_path', type=str, default=None, help='Results are written to output_path')
     parser.add_argument('--n-docs', type=int, default=100, help="Amount of top docs to return")
     parser.add_argument('--validation_workers', type=int, default=32,
                         help="Number of parallel processes to validate results")

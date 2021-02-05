@@ -4,7 +4,6 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-import sys
 import torch
 import transformers
 import slurm
@@ -18,7 +17,6 @@ from options import Options
 from torch.utils.data import DataLoader, SequentialSampler
 import reader.evaluation
 import reader.model
-import types
 
 def evaluate(model, dataset, dataloader, tokenizer, opt):
     loss, curr_loss = 0.0, 0.0
@@ -43,8 +41,8 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
                 model.reset_score_storage()
 
             outputs = model.generate(
-                input_ids=context_ids.cuda().view(context_ids.size(0), -1),
-                attention_mask=context_mask.cuda().view(context_ids.size(0), -1),
+                input_ids=context_ids.cuda(),
+                attention_mask=context_mask.cuda(),
                 max_length=50,
             )
             if opt.write_crossattention_scores:
@@ -96,12 +94,11 @@ if __name__ == "__main__":
     dir_path.mkdir(parents=True, exist_ok=True)
     if opt.write_results:
         (dir_path / 'test_results').mkdir(parents=True, exist_ok=True)
+    logger = util.init_logger(opt.is_main, opt.is_distributed, Path(opt.checkpoint_dir) / opt.name / 'run.log')
     if not directory_exists and opt.is_main:
         options.print_options(opt)
-    logger = util.init_logger(opt.is_main, opt.is_distributed, Path(opt.checkpoint_dir) / opt.name / 'run.log')
 
 
-    model_class = reader.model.FiDT5
     tokenizer = transformers.T5Tokenizer.from_pretrained('t5-base', return_dict=False)
 
     collator_function = reader.data.Collator(opt.text_maxlength, tokenizer)
@@ -127,8 +124,8 @@ if __name__ == "__main__":
         collate_fn=collator_function
     )
     
+    model_class = reader.model.FiDT5
     model = model_class.from_pretrained(opt.model_path)
-    model.wrap_encoder()
     model = model.to(opt.device)
 
     logger.info("Start eval")

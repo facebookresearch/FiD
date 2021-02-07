@@ -44,7 +44,7 @@ python test.py \
   --n_context 100 \
   --name my_test \
   --checkpoint_dir checkpoint \
-```  
+```
 
 ### Data format
 
@@ -119,7 +119,7 @@ python train_retriever.py \
 ### 3. Knowldege source indexing
 
 Then the trained retriever is used to index a knowldege source, Wikipedia in our case.
-Now that we have trained our retriever, 
+Now that we have trained our retriever,
 [`retriever/generate_embeddings.py`](retriever/generate_embeddings.py) provides the code to train a retriever using the scores previously generated.
 
 ```shell
@@ -168,7 +168,7 @@ We release pretrained models and indexes.
 
 ```
 @misc{izacard2020leveraging,
-      title={Leveraging Passage Retrieval with Generative Models for Open Domain Question Answering}, 
+      title={Leveraging Passage Retrieval with Generative Models for Open Domain Question Answering},
       author={Gautier Izacard and Edouard Grave},
       year={2020},
       eprint={2007.01282},
@@ -183,7 +183,7 @@ Distilling Knowledge from Reader to Retriever for Question Answering
 
 ```
 @misc{izacard2020distilling,
-      title={Distilling Knowledge from Reader to Retriever for Question Answering}, 
+      title={Distilling Knowledge from Reader to Retriever for Question Answering},
       author={Gautier Izacard and Edouard Grave},
       year={2020},
       eprint={2012.04584},
@@ -196,7 +196,7 @@ Distilling Knowledge from Reader to Retriever for Question Answering
 
 ```
 @misc{izacard2020memory,
-      title={A Memory Efficient Baseline for Open Domain Question Answering}, 
+      title={A Memory Efficient Baseline for Open Domain Question Answering},
       author={Gautier Izacard and Fabio Petroni and Lucas Hosseini and Nicola De Cao and Sebastian Riedel and Edouard Grave},
       year={2020},
       eprint={2012.15156},
@@ -208,6 +208,3 @@ Distilling Knowledge from Reader to Retriever for Question Answering
 ## License
 
 See the [LICENSE](LICENSE) file for more details.
-
-
-

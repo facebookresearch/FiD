@@ -1,6 +1,6 @@
 # Copyright (c) Facebook, Inc. and its affiliates.
 # All rights reserved.
-# 
+#
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
@@ -15,7 +15,7 @@ class Options():
     def __init__(self):
         self.parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
         self.initialize_parser()
-        
+
     def add_optim_options(self):
         self.parser.add_argument('--warmup_steps', type=int, default=1000)
         self.parser.add_argument('--total_steps', type=int, default=1000)
@@ -71,11 +71,11 @@ class Options():
                             help="Master port (for multi-node SLURM jobs)")
         self.parser.add_argument('--seed', type=int, default=0, help="random seed for initialization")
         # training parameters
-        self.parser.add_argument('--eval_freq', type=int, default=500, 
+        self.parser.add_argument('--eval_freq', type=int, default=500,
                             help='evaluate model every <eval_freq> steps during training')
-        self.parser.add_argument('--save_freq', type=int, default=5000, 
+        self.parser.add_argument('--save_freq', type=int, default=5000,
                             help='save model every <save_freq> steps during training')
-        self.parser.add_argument('--eval_print_freq', type=int, default=1000, 
+        self.parser.add_argument('--eval_print_freq', type=int, default=1000,
                             help='print intermdiate results of evaluation every <eval_print_freq> steps')
 
 
@@ -100,3 +100,19 @@ class Options():
     def parse(self):
         opt = self.parser.parse_args()
         return opt
+
+
+def get_options(use_reader=False,
+                use_retriever=False,
+                use_optim=False,
+                use_eval=False):
+    options = Options()
+    if use_reader:
+        options.add_reader_options()
+    if use_retriever:
+        options.add_retriever_options()
+    if use_optim:
+        options.add_optim_options()
+    if use_eval:
+        options.add_eval_options()
+    return options.parse()

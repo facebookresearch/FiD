@@ -1,6 +1,6 @@
 # Copyright (c) Facebook, Inc. and its affiliates.
 # All rights reserved.
-# 
+#
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
@@ -16,8 +16,8 @@ import torch.distributed as dist
 logger = logging.getLogger(__name__)
 
 def init_logger(is_main=True, is_distributed=False, filename=None):
-    if is_distributed: 
-        torch.distributed.barrier() 
+    if is_distributed:
+        torch.distributed.barrier()
     handlers = [logging.StreamHandler(sys.stdout)]
     if filename is not None:
         handlers.append(logging.FileHandler(filename=filename))
@@ -31,6 +31,14 @@ def init_logger(is_main=True, is_distributed=False, filename=None):
     logging.getLogger('transformers.tokenization_utils_base').setLevel(logging.ERROR)
     return logger
 
+def get_checkpoint_path(opt):
+    checkpoint_path = Path(opt.checkpoint_dir) / opt.name
+    checkpoint_exists = checkpoint_path.exists()
+    if opt.is_distributed:
+        torch.distributed.barrier()
+    checkpoint_path.mkdir(parents=True, exist_ok=True)
+    return checkpoint_path, checkpoint_exists
+
 def symlink_force(target, link_name):
     try:
         os.symlink(target, link_name)
@@ -40,7 +48,6 @@ def symlink_force(target, link_name):
             os.symlink(target, link_name)
         else:
             raise e
-
 
 def save(model, optimizer, scheduler, step, best_eval_metric, opt, dir_path, name):
     model_to_save = model.module if hasattr(model, "module") else model
@@ -66,7 +73,7 @@ def load(model_class, dir_path, opt, reset_params=False):
     optimizer_path = os.path.join(epoch_path, "optimizer.pth.tar")
     logger.info("Loading %s" % epoch_path)
     model = model_class.from_pretrained(epoch_path)
-    model = model.to(opt.device) 
+    model = model.to(opt.device)
     logger.info("loading checkpoint %s" %optimizer_path)
     checkpoint = torch.load(optimizer_path, map_location=opt.device)
     opt_checkpoint = checkpoint["opt"]
@@ -83,7 +90,6 @@ def load(model_class, dir_path, opt, reset_params=False):
         optimizer, scheduler = set_optim(opt, model)
 
     return model, optimizer, scheduler, opt_checkpoint, step, best_eval_metric
-
 
 class WarmupLinearScheduler(torch.optim.lr_scheduler.LambdaLR):
     def __init__(self, optimizer, warmup_steps, scheduler_steps, min_ratio, fixed_lr, last_epoch=-1):

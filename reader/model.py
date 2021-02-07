@@ -19,17 +19,17 @@ class FiDT5(transformers.T5ForConditionalGeneration):
 
     def forward(self, **kwargs):
         if 'input_ids' in kwargs:
-            kwargs['input_ids'] = kwargs['input_ids'].view(kwargs['input_ids'].size(0), -1)
+            kwargs['input_ids'] = kwargs['input_ids'].reshape(kwargs['input_ids'].size(0), -1)
         if 'attention_mask' in kwargs:
-            kwargs['attention_mask'] = kwargs['attention_mask'].view(kwargs['attention_mask'].size(0), -1)
+            kwargs['attention_mask'] = kwargs['attention_mask'].reshape(kwargs['attention_mask'].size(0), -1)
 
         return super(FiDT5, self).forward(
             **kwargs
         )
 
     def generate(self, input_ids, attention_mask, max_length):
-        input_ids=input_ids.view(input_ids.size(0), -1)
-        attention_mask=attention_mask.view(attention_mask.size(0), -1)
+        input_ids=input_ids.reshape(input_ids.size(0), -1)
+        attention_mask=attention_mask.reshape(attention_mask.size(0), -1)
         return super(FiDT5, self).generate(
             input_ids=input_ids,
             attention_mask=attention_mask,
@@ -86,7 +86,7 @@ class FiDT5(transformers.T5ForConditionalGeneration):
             scores.append(mod.layer[1].EncDecAttention.score_storage)
         scores = torch.cat(scores, dim=2)
         bsz, n_heads, n_layers, _ = scores.size()
-        scores = scores.view(bsz, n_heads, n_layers, n_passages, -1) #batch_size, n_head, n_layers, n_passages, text_maxlength
+        scores = scores.reshape(bsz, n_heads, n_layers, n_passages, -1) #batch_size, n_head, n_layers, n_passages, text_maxlength
         scores = scores.masked_fill(~context_mask[:, None, None], 0.)
         scores = scores.sum(dim=[1, 2, 4])
         ntokens = context_mask.sum(dim=[2]) * n_layers * n_heads
@@ -114,10 +114,10 @@ class EncoderWrapper(torch.nn.Module):
     def forward(self, input_ids=None, attention_mask=None, **kwargs,):
         bsz, total_length = input_ids.shape #total length = n_passages * passage_length
         passage_length = total_length // self.n_passages
-        input_ids = input_ids.view(bsz*self.n_passages, passage_length)
-        attention_mask = attention_mask.view(bsz*self.n_passages, passage_length)
+        input_ids = input_ids.reshape(bsz*self.n_passages, passage_length)
+        attention_mask = attention_mask.reshape(bsz*self.n_passages, passage_length)
         outputs = self.encoder(input_ids, attention_mask, **kwargs)
-        outputs = (outputs[0].view(bsz, self.n_passages*passage_length, -1), ) + outputs[1:]
+        outputs = (outputs[0].reshape(bsz, self.n_passages*passage_length, -1), ) + outputs[1:]
         return outputs 
 
 class CheckpointWrapper(torch.nn.Module):
@@ -204,10 +204,10 @@ def cross_attention_forward(
     n_heads, d_heads = self.n_heads, self.d_kv
     klen = kv.size(1)
 
-    q = self.q(input).view(bsz, -1, n_heads, d_heads).transpose(1, 2)
+    q = self.q(input).reshape(bsz, -1, n_heads, d_heads).transpose(1, 2)
     if past_key_value_state == None:
-        k = self.k(kv).view(bsz, -1, n_heads, d_heads).transpose(1, 2)
-        v = self.v(kv).view(bsz, -1, n_heads, d_heads).transpose(1, 2)
+        k = self.k(kv).reshape(bsz, -1, n_heads, d_heads).transpose(1, 2)
+        v = self.v(kv).reshape(bsz, -1, n_heads, d_heads).transpose(1, 2)
     else:
         k, v = past_key_value_state
 
@@ -227,7 +227,7 @@ def cross_attention_forward(
     attn = F.dropout(attn, p=self.dropout, training=self.training)
 
     output = torch.matmul(attn, v)
-    output = output.transpose(1, 2).contiguous().view(bsz, -1, self.inner_dim)
+    output = output.transpose(1, 2).reshape(bsz, -1, self.inner_dim)
     output = self.o(output)
 
     if use_cache:

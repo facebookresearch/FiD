@@ -12,8 +12,9 @@ import util
 import numpy as np
 from pathlib import Path
 import torch.distributed as dist
-from options import Options
 from torch.utils.data import DataLoader, SequentialSampler
+
+from options import Options
 import src.data
 import src.evaluation
 import src.model

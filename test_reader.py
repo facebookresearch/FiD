@@ -8,15 +8,15 @@ import torch
 import transformers
 import slurm
 import logging
-import reader.data
 import util
 import numpy as np
 from pathlib import Path
 import torch.distributed as dist
 from options import Options
 from torch.utils.data import DataLoader, SequentialSampler
-import reader.evaluation
-import reader.model
+import src.data
+import src.evaluation
+import src.model
 
 def evaluate(model, dataset, dataloader, tokenizer, opt):
     loss, curr_loss = 0.0, 0.0
@@ -33,9 +33,7 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
         fw = open(write_path / '%d.txt'%opt.global_rank, 'a')
     with torch.no_grad():
         for i, batch in enumerate(dataloader):
-            (idx, _, context_ids, context_mask) = batch
-            n_passages = context_ids.size(1) 
-            model.encoder.n_passages = n_passages
+            (idx, _, _, context_ids, context_mask) = batch
 
             if opt.write_crossattention_scores:
                 model.reset_score_storage()
@@ -54,7 +52,7 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
                 question = example['question']
                 gold = example['answers']
                 exid = example['id']
-                score = reader.evaluation.ems(ans, gold)
+                score = src.evaluation.ems(ans, gold)
                 exactmatch.append(score)
 
                 if opt.write_results:
@@ -101,18 +99,15 @@ if __name__ == "__main__":
 
     tokenizer = transformers.T5Tokenizer.from_pretrained('t5-base', return_dict=False)
 
-    collator_function = reader.data.Collator(opt.text_maxlength, tokenizer)
-    eval_examples = reader.data.load_data(
+    collator_function = src.data.Collator(opt.text_maxlength, tokenizer)
+    eval_examples = src.data.load_data(
         opt.eval_data, 
         global_rank=opt.global_rank, #use the global rank and world size attibutes to split the eval set on multiple gpus
         world_size=opt.world_size
     )
-    eval_dataset = reader.data.Dataset(
+    eval_dataset = src.data.Dataset(
         eval_examples, 
         opt.n_context, 
-        tokenizer, 
-        opt.text_maxlength, 
-        opt.no_title, 
     )
 
     eval_sampler = SequentialSampler(eval_dataset) 
@@ -124,7 +119,7 @@ if __name__ == "__main__":
         collate_fn=collator_function
     )
     
-    model_class = reader.model.FiDT5
+    model_class = src.model.FiDT5
     model = model_class.from_pretrained(opt.model_path)
     model = model.to(opt.device)
 

@@ -26,10 +26,10 @@ def train(model, optimizer, scheduler, step, train_dataset, eval_dataset, opt, c
     if opt.is_main:
         tb_logger = torch.utils.tensorboard.SummaryWriter(Path(opt.checkpoint_dir)/opt.name)
 
-    #train_sampler = DistributedSampler(train_dataset) if opt.is_distributed \
-    #    else RandomSampler(train_dataset) 
-    torch.manual_seed(opt.global_rank + opt.seed)
-    train_sampler = RandomSampler(train_dataset)
+    train_sampler = DistributedSampler(train_dataset) if opt.is_distributed \
+        else RandomSampler(train_dataset) 
+    #torch.manual_seed(opt.global_rank + opt.seed)
+    #train_sampler = RandomSampler(train_dataset)
     train_dataloader = DataLoader(train_dataset, sampler=train_sampler, 
         batch_size=opt.per_gpu_batch_size, drop_last=True, num_workers=10, collate_fn=collator)
 
@@ -37,8 +37,8 @@ def train(model, optimizer, scheduler, step, train_dataset, eval_dataset, opt, c
     epoch = 1
     model.train()
     while step < opt.total_steps:
-        #if opt.is_distributed:
-        #    train_sampler.set_epoch(epoch)
+        if opt.is_distributed:
+            train_sampler.set_epoch(epoch)
         epoch += 1
         for i, batch in enumerate(train_dataloader):
             step += 1
@@ -153,8 +153,8 @@ if __name__ == "__main__":
 
     train_examples = reader.data.load_data(
         opt.train_data, 
-        global_rank=opt.global_rank, 
-        world_size=opt.world_size, #use the global rank and world size attibutes to split the eval set on multiple gpus
+        #global_rank=opt.global_rank, 
+        #world_size=opt.world_size, #use the global rank and world size attibutes to split the eval set on multiple gpus
         maxload=opt.maxload
     )
     train_dataset = reader.data.Dataset(

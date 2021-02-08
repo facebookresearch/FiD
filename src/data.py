@@ -12,7 +12,7 @@ import numpy as np
 class Dataset(torch.utils.data.Dataset):
     def __init__(self,
                  data,
-                 n_context,
+                 n_context=None,
                  question_prefix='question:',
                  title_prefix='title:',
                  passage_prefix='context:'):
@@ -33,6 +33,7 @@ class Dataset(torch.utils.data.Dataset):
             return random.choice(example['answers']) + ' </s>'
         else:
             return None
+        # TODO(gizacard): add normalization for TQA
 
     def __getitem__(self, index):
         example = self.data[index]
@@ -49,7 +50,7 @@ class Dataset(torch.utils.data.Dataset):
             if len(contexts) == 0:
                 contexts = [question]
         else:
-            contexts, scores = None, None
+            passages, scores = None, None
 
         return {
             'index' : index,
@@ -106,6 +107,8 @@ class Collator(object):
 
         #text_passages = [ex['passages'] for ex in batch]
         def append_question(example):
+            if example['passages'] is None:
+                return [example['question']]
             return [example['question'] + " " + t for t in example['passages']]
         text_passages = [append_question(example) for example in batch]
         passage_ids, passage_masks = encode_passages(text_passages,

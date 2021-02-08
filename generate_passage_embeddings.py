@@ -5,21 +5,22 @@
 # LICENSE file in the root directory of this source tree.
 
 import os
-import pathlib
 
 import argparse
 import csv
 import logging
 import pickle
+from pathlib import Path
 
 import numpy as np
 import torch
 
 import transformers
-import retriever.data
-import retriever.model
+import src.model
+import src.data
 import util
 import slurm
+
 
 from torch.utils.data import DataLoader
 
@@ -27,8 +28,8 @@ logger = logging.getLogger(__name__)
 
 def embed_passages(opt, passages, model, tokenizer):
     batch_size = opt.per_gpu_batch_size * opt.world_size
-    collator = retriever.data.TextCollator(tokenizer, model.config.passage_maxlength)
-    dataset = retriever.data.TextDataset(passages, title_prefix='title:', passage_prefix='context:')
+    collator = src.data.TextCollator(tokenizer, model.config.passage_maxlength)
+    dataset = src.data.TextDataset(passages, title_prefix='title:', passage_prefix='context:')
     dataloader = DataLoader(dataset, batch_size=batch_size, drop_last=False, num_workers=10, collate_fn=collator)
     total = 0
     allids, allembeddings = [], []
@@ -62,13 +63,13 @@ def load_passages(args):
                     passages.append((row[0], row[1], row[2]))
                 except:
                     logger.warning(f'The following input line has not been correctly loaded: {row}')
-
+    return passages
 
 
 def main(opt):
     logger = util.init_logger(is_main=True)
     tokenizer = transformers.BertTokenizerFast.from_pretrained('bert-base-uncased')
-    model_class = retriever.model.Retriever
+    model_class = src.model.Retriever
     model, _, _, _, _, _ = util.load(model_class, opt.model_path, opt)
     
     model.eval()
@@ -90,8 +91,8 @@ def main(opt):
     allids, allembeddings = embed_passages(opt, passages, model, tokenizer)
 
     output_path = Path(args.output_path)
-    save_file = args.output_path.parent / (output_path.name + f'{args.shard_id:02d}')
-    output_path.parent.mkdir(parents=True, exists_ok=True) 
+    save_file = output_path.parent / (output_path.name + f'_{args.shard_id:02d}')
+    output_path.parent.mkdir(parents=True, exist_ok=True) 
     logger.info(f'Saving {len(allids)} passage embeddings to {save_file}')
     with open(save_file, mode='wb') as f:
         pickle.dump((allids, allembeddings), f)

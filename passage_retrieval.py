@@ -19,8 +19,8 @@ import transformers
 
 import slurm
 import util
-import retriever.data
-import retriever.model
+import src.model
+import src.data
 import retriever.index
 
 from torch.utils.data import DataLoader
@@ -31,17 +31,17 @@ logger = logging.getLogger(__name__)
 
 def embed_questions(opt, data, model, tokenizer):
     batch_size = opt.per_gpu_batch_size * opt.world_size
-    dataset = retriever.data.Dataset(data)
-    collator = retriever.data.Collator(tokenizer, opt.question_maxlength)
+    dataset = src.data.Dataset(data)
+    collator = src.data.Collator(opt.question_maxlength, tokenizer)
     dataloader = DataLoader(dataset, batch_size=batch_size, drop_last=False, num_workers=10, collate_fn=collator)
     model.eval()
     embedding = []
     with torch.no_grad():
         for k, batch in enumerate(dataloader):
-            (idx, question_ids, question_mask, _, _, _) = batch
+            (idx, _, _, question_ids, question_mask) = batch
             output = model.embed_text(
-                text_ids=question_ids.to(opt.device), 
-                text_mask=question_mask.to(opt.device), 
+                text_ids=question_ids.to(opt.device).view(-1, question_ids.size(-1)), 
+                text_mask=question_mask.to(opt.device).view(-1, question_ids.size(-1)), 
                 apply_mask=model.apply_question_mask,
             )
             embedding.append(output)
@@ -131,8 +131,8 @@ def add_hasanswer(data, hasanswer):
 def main(opt):
     util.init_logger(is_main=True)
     tokenizer = transformers.BertTokenizerFast.from_pretrained('bert-base-uncased')
-    data = retriever.data.load_data(opt.data)
-    model_class = retriever.model.Retriever
+    data = src.data.load_data(opt.data)
+    model_class = src.model.Retriever
     model, _, _, _, _, _ = util.load(model_class, opt.model_path, opt)
 
     model.cuda()

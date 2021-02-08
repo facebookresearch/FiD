@@ -35,8 +35,6 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
     with torch.no_grad():
         for i, batch in enumerate(dataloader):
             (idx, _, _, context_ids, context_mask) = batch
-            n_passages = context_ids.size(1)
-            model.encoder.n_passages = n_passages
 
             if opt.write_crossattention_scores:
                 model.reset_score_storage()

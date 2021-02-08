@@ -17,25 +17,35 @@ class FiDT5(transformers.T5ForConditionalGeneration):
         super().__init__(config)
         self.wrap_encoder()
 
-    def forward(self, input_ids=None, attention_mask=None, **kwargs):
-        """
-        input_ids and attention_mask are of dimension:
-            batch_size x n_passage x passage_length
-        and are resized to a 2D tensor of dimension:
-            batch_size x (n_passage x passage_length)
-        The encoder wrapper then resizes the input to
-            (batch_size x n_passage) x passage_length.
-        """
-        if input_ids != None:
-            self.encoder.n_passages = input_ids.size(1)
-            return super().forward(
-                input_ids=input_ids.view(input_ids.size(0), -1),
-                attention_mask=attention_mask.view(input_ids.size(0), -1),
-                **kwargs
-            )
-        else:
-            return super().forward(**kwargs)
+    def forward_(self, **kwargs):
+        if 'input_ids' in kwargs:
+            kwargs['input_ids'] = kwargs['input_ids'].view(kwargs['input_ids'].size(0), -1)
+        if 'attention_mask' in kwargs:
+            kwargs['attention_mask'] = kwargs['attention_mask'].view(kwargs['attention_mask'].size(0), -1)
 
+        return super(FiDT5, self).forward(
+            **kwargs
+        )
+
+    # We need to resize as B x (N * L) instead of (B * N) x L here
+    # because the T5 forward method uses the input tensors to infer
+    # dimensions used in the decoder.
+    # EncoderWrapper resizes the inputs as (B * N) x L.
+    def forward(self, input_ids=None, attention_mask=None, **kwargs):
+        if input_ids != None:
+            # inputs might have already be resized in the generate method
+            if input_ids.dim() == 3:
+                self.encoder.n_passages = input_ids.size(1)
+            input_ids = input_ids.view(input_ids.size(0), -1)
+        if attention_mask != None:
+            attention_mask = attention_mask.view(attention_mask.size(0), -1)
+        return super().forward(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            **kwargs
+        )
+
+    # We need to resize the inputs here, as the generate method expect 2D tensors
     def generate(self, input_ids, attention_mask, max_length):
         self.encoder.n_passages = input_ids.size(1)
         return super().generate(

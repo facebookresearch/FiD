@@ -33,7 +33,6 @@ class Dataset(torch.utils.data.Dataset):
             return random.choice(example['answers']) + ' </s>'
         else:
             return None
-        # TODO(gizacard): add normalization for TQA
 
     def __getitem__(self, index):
         example = self.data[index]
@@ -64,7 +63,7 @@ class Dataset(torch.utils.data.Dataset):
         if self.n_context is None or not 'score' in self.data[0]['ctxs'][0]:
             return
         for ex in self.data:
-            ex['ctxs'].sort(key=lambda x: x['score'], reverse=True)
+            ex['ctxs'].sort(key=lambda x: float(x['score']), reverse=True)
 
     def get_example(self, index):
         return self.data[index]

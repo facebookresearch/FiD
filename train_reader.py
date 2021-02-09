@@ -25,8 +25,6 @@ def train(model, optimizer, scheduler, step, train_dataset, eval_dataset, opt, c
     if opt.is_main:
         tb_logger = torch.utils.tensorboard.SummaryWriter(Path(opt.checkpoint_dir)/opt.name)
 
-    #train_sampler = DistributedSampler(train_dataset) if opt.is_distributed \
-    #    else RandomSampler(train_dataset) 
     torch.manual_seed(opt.global_rank + opt.seed)
     train_sampler = RandomSampler(train_dataset)
     train_dataloader = DataLoader(train_dataset, sampler=train_sampler, 
@@ -36,8 +34,6 @@ def train(model, optimizer, scheduler, step, train_dataset, eval_dataset, opt, c
     epoch = 1
     model.train()
     while step < opt.total_steps:
-        #if opt.is_distributed:
-        #    train_sampler.set_epoch(epoch)
         epoch += 1
         for i, batch in enumerate(train_dataloader):
             step += 1

@@ -78,7 +78,7 @@ def train(model, optimizer, scheduler, step, train_dataset, eval_dataset, opt, c
                     log += f"lr: {scheduler.get_last_lr()[0]:.5f}"
                     logger.info(log)
                     curr_loss = 0
-                    f tb_logger is not None:
+                    if tb_logger is not None:
                         tb_logger.add_scalar("Evaluation", dev_em, step)
                         tb_logger.add_scalar("Training", curr_loss / (opt.eval_freq), step)
 

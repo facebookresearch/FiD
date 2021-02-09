@@ -26,7 +26,11 @@ def train(model, optimizer, scheduler, global_step,
                     train_dataset, dev_dataset, opt, collator, best_eval_loss):
 
     if opt.is_main:
-        tb_logger = torch.utils.tensorboard.SummaryWriter(Path(opt.checkpoint_dir)/opt.name)
+        try:
+            tb_logger = torch.utils.tensorboard.SummaryWriter(Path(opt.checkpoint_dir)/opt.name)
+        except:
+            tb_logger = None
+            logger.warning('Tensorboard is not available.')
     train_sampler = DistributedSampler(train_dataset) if opt.is_distributed else RandomSampler(train_dataset)
     train_dataloader = DataLoader(
         train_dataset, 
@@ -39,7 +43,6 @@ def train(model, optimizer, scheduler, global_step,
 
     loss, curr_loss = 0.0, 0.0
     epoch = 1
-    #eval_loss, top_metric, avg_metric = evaluate(model, dev_dataset, dev_dataloader, tokenizer, opt)
     model.train()
     while global_step < opt.total_steps:
         if opt.is_distributed > 1:
@@ -69,8 +72,6 @@ def train(model, optimizer, scheduler, global_step,
 
             if global_step % opt.eval_freq == 0:
                 eval_loss, inversions, avg_topk, idx_topk = evaluate(model, dev_dataset, collator, opt)
-                if opt.is_main:
-                    tb_logger.add_scalar("Evaluation", eval_loss, global_step)
                 if eval_loss < best_eval_loss:
                     best_eval_loss = eval_loss
                     if opt.is_main:
@@ -87,7 +88,10 @@ def train(model, optimizer, scheduler, global_step,
                     for k in idx_topk:    
                         log += f" | idx top{k}: {idx_topk[k]:.1f}"
                     logger.info(log)
-                    tb_logger.add_scalar("Training", curr_loss / (opt.eval_freq), global_step)
+
+                    if opt.is_main and tb_logger is not None:
+                        tb_logger.add_scalar("Evaluation", eval_loss, global_step)
+                        tb_logger.add_scalar("Training", curr_loss / (opt.eval_freq), global_step)
                     curr_loss = 0
 
             if opt.is_main and global_step % opt.save_freq == 0:

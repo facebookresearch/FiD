@@ -23,7 +23,11 @@ from pathlib import Path
 def train(model, optimizer, scheduler, step, train_dataset, eval_dataset, opt, collator, best_dev_em):
 
     if opt.is_main:
-        tb_logger = torch.utils.tensorboard.SummaryWriter(Path(opt.checkpoint_dir)/opt.name)
+        try:
+            tb_logger = torch.utils.tensorboard.SummaryWriter(Path(opt.checkpoint_dir)/opt.name)
+        except:
+            tb_logger = None
+            logger.warning('Tensorboard is not available.')
 
     torch.manual_seed(opt.global_rank + opt.seed)
     train_sampler = RandomSampler(train_dataset)
@@ -65,7 +69,6 @@ def train(model, optimizer, scheduler, step, train_dataset, eval_dataset, opt, c
                 dev_em = evaluate(model, eval_dataset, tokenizer, collator, opt)
                 model.train()
                 if opt.is_main:
-                    tb_logger.add_scalar("Evaluation", dev_em, step)
                     if dev_em > best_dev_em:
                         best_dev_em = dev_em
                         util.save(model, optimizer, scheduler, step, best_dev_em, opt, dir_path, 'best_dev')
@@ -74,8 +77,10 @@ def train(model, optimizer, scheduler, step, train_dataset, eval_dataset, opt, c
                     log += f"evaluation: {100*dev_em:.2f}EM |"
                     log += f"lr: {scheduler.get_last_lr()[0]:.5f}"
                     logger.info(log)
-                    tb_logger.add_scalar("Training", curr_loss / (opt.eval_freq), step)
                     curr_loss = 0
+                    f tb_logger is not None:
+                        tb_logger.add_scalar("Evaluation", dev_em, step)
+                        tb_logger.add_scalar("Training", curr_loss / (opt.eval_freq), step)
 
             if opt.is_main and step % opt.save_freq == 0:
                 util.save(model, optimizer, scheduler, step, best_dev_em, opt, dir_path, f"step-{step}")

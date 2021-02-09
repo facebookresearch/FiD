@@ -30,7 +30,7 @@ def train(model, optimizer, scheduler, step, train_dataset, eval_dataset, opt, c
             tb_logger = None
             logger.warning('Tensorboard is not available.')
 
-    torch.manual_seed(opt.global_rank + opt.seed)
+    torch.manual_seed(opt.global_rank + opt.seed) #different seed for different sampling depending on global_rank
     train_sampler = RandomSampler(train_dataset)
     train_dataloader = DataLoader(
         train_dataset,
@@ -45,8 +45,6 @@ def train(model, optimizer, scheduler, step, train_dataset, eval_dataset, opt, c
     epoch = 1
     model.train()
     while step < opt.total_steps:
-        if opt.is_distributed:
-            train_sampler.set_epoch(epoch)
         epoch += 1
         for i, batch in enumerate(train_dataloader):
             step += 1

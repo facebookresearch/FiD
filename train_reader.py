@@ -14,10 +14,9 @@ import util
 import numpy as np
 from options import Options
 from torch.utils.data import DataLoader, RandomSampler, DistributedSampler, SequentialSampler
-from reader.model import EncoderWrapper
-import reader.evaluation
-import reader.data
-import reader.model
+import src.evaluation
+import src.data
+import src.model
 from pathlib import Path
 
 
@@ -26,10 +25,10 @@ def train(model, optimizer, scheduler, step, train_dataset, eval_dataset, opt, c
     if opt.is_main:
         tb_logger = torch.utils.tensorboard.SummaryWriter(Path(opt.checkpoint_dir)/opt.name)
 
-    train_sampler = DistributedSampler(train_dataset) if opt.is_distributed \
-        else RandomSampler(train_dataset) 
-    #torch.manual_seed(opt.global_rank + opt.seed)
-    #train_sampler = RandomSampler(train_dataset)
+    #train_sampler = DistributedSampler(train_dataset) if opt.is_distributed \
+    #    else RandomSampler(train_dataset) 
+    torch.manual_seed(opt.global_rank + opt.seed)
+    train_sampler = RandomSampler(train_dataset)
     train_dataloader = DataLoader(train_dataset, sampler=train_sampler, 
         batch_size=opt.per_gpu_batch_size, drop_last=True, num_workers=10, collate_fn=collator)
 
@@ -37,12 +36,12 @@ def train(model, optimizer, scheduler, step, train_dataset, eval_dataset, opt, c
     epoch = 1
     model.train()
     while step < opt.total_steps:
-        if opt.is_distributed:
-            train_sampler.set_epoch(epoch)
+        #if opt.is_distributed:
+        #    train_sampler.set_epoch(epoch)
         epoch += 1
         for i, batch in enumerate(train_dataloader):
             step += 1
-            (idx, labels, context_ids, context_mask) = batch
+            (idx, labels, _, context_ids, context_mask) = batch
             n_passages = context_ids.size(1)
             if hasattr(model, "module"):
                 model.module.encoder.n_passages = n_passages
@@ -104,7 +103,7 @@ def evaluate(model, dataset, tokenizer, collator, opt):
     model = model.module if hasattr(model, "module") else model
     with torch.no_grad():
         for i, batch in enumerate(dataloader):
-            (idx, _, context_ids, context_mask) = batch
+            (idx, _, _, context_ids, context_mask) = batch
             model.encoder.n_passages = context_ids.size(1)
 
             outputs = model.generate(
@@ -116,7 +115,7 @@ def evaluate(model, dataset, tokenizer, collator, opt):
             for k, o in enumerate(outputs):
                 ans = tokenizer.decode(o, skip_special_tokens=True)
                 gold = dataset.get_example(idx[k])['answers']
-                score = reader.evaluation.ems(ans, gold)
+                score = src.evaluation.ems(ans, gold)
                 total += 1
                 exactmatch.append(score)
 
@@ -145,43 +144,33 @@ if __name__ == "__main__":
 
 
     model_name = 't5-' + opt.model_size
-    model_class = reader.model.FiDT5
+    model_class = src.model.FiDT5
 
     #load data
     tokenizer = transformers.T5Tokenizer.from_pretrained(model_name)
-    collator = reader.data.Collator(opt.text_maxlength, tokenizer)
+    collator = src.data.Collator(opt.text_maxlength, tokenizer)
 
-    train_examples = reader.data.load_data(
+    train_examples = src.data.load_data(
         opt.train_data, 
-        #global_rank=opt.global_rank, 
-        #world_size=opt.world_size, #use the global rank and world size attibutes to split the eval set on multiple gpus
+        global_rank=opt.global_rank, 
+        world_size=opt.world_size, #use the global rank and world size attibutes to split the eval set on multiple gpus
         maxload=opt.maxload
     )
-    train_dataset = reader.data.Dataset(
-        train_examples, 
-        opt.n_context, 
-        tokenizer, 
-        text_maxlength=opt.text_maxlength
-    )
-    eval_examples = reader.data.load_data(
+    train_dataset = src.data.Dataset(train_examples, opt.n_context,)
+    eval_examples = src.data.load_data(
         opt.eval_data, 
         global_rank=opt.global_rank, 
         world_size=opt.world_size, #use the global rank and world size attibutes to split the eval set on multiple gpus
         maxload=opt.maxload
     )     
-    eval_dataset = reader.data.Dataset(
-        eval_examples, 
-        opt.n_context, 
-        tokenizer, 
-        text_maxlength=opt.text_maxlength
-    )
+    eval_dataset = src.data.Dataset(eval_examples, opt.n_context,)
 
     step = 0
     best_dev_em = 0.
 
     if not directory_exists and opt.model_path == "none":
         t5 = transformers.T5ForConditionalGeneration.from_pretrained(model_name)
-        model = reader.model.FiDT5(t5.config)
+        model = src.model.FiDT5(t5.config)
         model.load_t5(t5.state_dict())
         model = model.to(opt.local_rank)
         optimizer, scheduler = util.set_optim(opt, model)

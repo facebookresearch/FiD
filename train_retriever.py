@@ -8,20 +8,19 @@ import time
 import sys
 import torch
 import transformers
-import slurm
-import logging
-import util
+from pathlib import Path
 import numpy as np
 import torch.distributed as dist
 from torch.utils.tensorboard import SummaryWriter
-from options import Options
 from torch.utils.data import DataLoader, RandomSampler, DistributedSampler, SequentialSampler
 
 
+import src.slurm
+import src.util
 import src.evaluation
 import src.data
 import src.model
-from pathlib import Path
+from src.options import Options
 
 
 def train(model, optimizer, scheduler, global_step,
@@ -69,7 +68,7 @@ def train(model, optimizer, scheduler, global_step,
                 scheduler.step()
                 model.zero_grad()
 
-            train_loss = util.average_main(train_loss, opt)
+            train_loss = src.util.average_main(train_loss, opt)
             curr_loss += train_loss.item()
 
             if global_step % opt.eval_freq == 0:
@@ -77,7 +76,7 @@ def train(model, optimizer, scheduler, global_step,
                 if eval_loss < best_eval_loss:
                     best_eval_loss = eval_loss
                     if opt.is_main:
-                        util.save(model, optimizer, scheduler, global_step, best_eval_loss, opt, dir_path, 'best_dev')
+                        src.util.save(model, optimizer, scheduler, global_step, best_eval_loss, opt, dir_path, 'best_dev')
                 model.train()
                 if opt.is_main:
                     log = f"{global_step} / {opt.total_steps}"
@@ -91,13 +90,13 @@ def train(model, optimizer, scheduler, global_step,
                         log += f" | idx top{k}: {idx_topk[k]:.1f}"
                     logger.info(log)
 
-                    if opt.is_main and tb_logger is not None:
+                    if tb_logger is not None:
                         tb_logger.add_scalar("Evaluation", eval_loss, global_step)
                         tb_logger.add_scalar("Training", curr_loss / (opt.eval_freq), global_step)
                     curr_loss = 0
 
             if opt.is_main and global_step % opt.save_freq == 0:
-                util.save(model, optimizer, scheduler, global_step, best_eval_loss, opt, dir_path, f"step-{global_step}")
+                src.util.save(model, optimizer, scheduler, global_step, best_eval_loss, opt, dir_path, f"step-{global_step}")
             if global_step > opt.total_steps:
                 break
 
@@ -133,13 +132,13 @@ def evaluate(model, dataset, collator, opt):
                 gold_score=gold_score.cuda(),
             )
 
-            retriever.evaluation.eval_batch(scores, inversions, avg_topk, idx_topk)
+            src.evaluation.eval_batch(scores, inversions, avg_topk, idx_topk)
             total += question_ids.size(0)
 
-    inversions = util.weighted_average(np.mean(inversions), total, opt)[0]
+    inversions = src.util.weighted_average(np.mean(inversions), total, opt)[0]
     for k in avg_topk:
-        avg_topk[k] = util.weighted_average(np.mean(avg_topk[k]), total, opt)[0]
-        idx_topk[k] = util.weighted_average(np.mean(idx_topk[k]), total, opt)[0]
+        avg_topk[k] = src.util.weighted_average(np.mean(avg_topk[k]), total, opt)[0]
+        idx_topk[k] = src.util.weighted_average(np.mean(idx_topk[k]), total, opt)[0]
 
     return loss, inversions, avg_topk, idx_topk
 
@@ -149,8 +148,8 @@ if __name__ == "__main__":
     options.add_optim_options()
     opt = options.parse()
     torch.manual_seed(opt.seed)
-    slurm.init_distributed_mode(opt)
-    slurm.init_signal_handler()
+    src.slurm.init_distributed_mode(opt)
+    src.slurm.init_signal_handler()
 
     dir_path = Path(opt.checkpoint_dir)/opt.name
     directory_exists = dir_path.exists()
@@ -160,48 +159,46 @@ if __name__ == "__main__":
     if not directory_exists and opt.is_main:
         options.print_options(opt)
 
-    logger = util.init_logger(opt.is_main, opt.is_distributed, Path(opt.checkpoint_dir) / opt.name / 'run.log')
+    logger = src.util.init_logger(opt.is_main, opt.is_distributed, Path(opt.checkpoint_dir) / opt.name / 'run.log')
     opt.train_batch_size = opt.per_gpu_batch_size * max(1, opt.world_size)
 
     #Load data
     tokenizer = transformers.BertTokenizerFast.from_pretrained('bert-base-uncased')
-    collator_function = retriever.data.Collator(
+    collator_function = src.data.RetrieverCollator(
         tokenizer, 
         passage_maxlength=opt.passage_maxlength, 
         question_maxlength=opt.question_maxlength
     )
-    train_examples = retriever.data.load_data(opt.train_data, maxload=opt.maxload)
-    train_dataset = retriever.data.Dataset(train_examples, opt.n_context)
-    eval_examples = retriever.data.load_data(
+    train_examples = src.data.load_data(opt.train_data, maxload=opt.maxload)
+    train_dataset = src.data.Dataset(train_examples, opt.n_context)
+    eval_examples = src.data.load_data(
         opt.eval_data, 
         global_rank=opt.global_rank, 
         world_size=opt.world_size, 
         maxload=opt.maxload
-    ) #use the global rank and world size attibutes to split the dev set on multiple gpus
-    eval_dataset = retriever.data.Dataset(eval_examples, opt.n_context)
+    )
+    eval_dataset = src.data.Dataset(eval_examples, opt.n_context)
     logger.info(f"Number of examples in train set: {len(train_dataset)}.")
     logger.info(f"Number of examples in eval set: {len(eval_dataset)}.")
 
 
     global_step = 0
     best_eval_loss = np.inf
-    config = retriever.model.RetrieverConfig(indexing_dimension=opt.indexing_dimension)
-    model_class = retriever.model.Retriever
+    config = src.model.RetrieverConfig(indexing_dimension=opt.indexing_dimension)
+    model_class = src.model.Retriever
     if not directory_exists and opt.model_path == "none":
         model = model_class(config, initialize_wBERT=True)
-        util.set_dropout(model, opt.dropout)
+        src.util.set_dropout(model, opt.dropout)
         model = model.to(opt.device)
-        optimizer, scheduler = util.set_optim(opt, model)
+        optimizer, scheduler = src.util.set_optim(opt, model)
     elif opt.model_path == "none":
         load_path = dir_path / 'checkpoint' / 'latest'
-        model, optimizer, scheduler, opt_checkpoint, global_step, best_eval_loss = util.load(
-            model_class, load_path, opt, reset_params=False
-        )
+        model, optimizer, scheduler, opt_checkpoint, global_step, best_eval_loss = \
+            src.util.load(model_class, load_path, opt, reset_params=False)
         logger.info(f"Model loaded from {dir_path}")
     else:
-        model, optimizer, scheduler, opt_checkpoint, global_step, best_eval_loss = util.load(
-            model_class, opt.model_path, opt, reset_params=True
-        )
+        model, optimizer, scheduler, opt_checkpoint, global_step, best_eval_loss = \
+            src.util.load(model_class, opt.model_path, opt, reset_params=True)
         logger.info(f"Model loaded from {opt.model_path}")
 
 

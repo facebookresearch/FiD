@@ -26,8 +26,12 @@ from pathlib import Path
 def train(model, optimizer, scheduler, step,
           train_dataset, dev_dataset, opt, collator, best_dev):
 
-    #if opt.is_main:
-    #    tb_logger = torch.utils.tensorboard.SummaryWriter(Path(opt.checkpoint_dir)/opt.name)
+    if opt.is_main:
+        try:
+            tb_logger = torch.utils.tensorboard.SummaryWriter(Path(opt.checkpoint_dir)/opt.name)
+        except:
+            tb_logger = None
+            logger.warning('Tensorboard is not available.')
     train_sampler = DistributedSampler(train_dataset) if opt.is_distributed \
         else RandomSampler(train_dataset)
     train_dataloader = DataLoader(
@@ -73,8 +77,6 @@ def train(model, optimizer, scheduler, step,
                 eval_loss, inversions, avg_topk, idx_topk = \
                     evaluate(model, dev_dataset, collator, opt)
                 model.train()
-                #if opt.is_main:
-                #    tb_logger.add_scalar("Evaluation", eval_loss, step)
                 if eval_loss < best_dev:
                     best_dev = eval_loss
                     if opt.is_main:
@@ -91,6 +93,8 @@ def train(model, optimizer, scheduler, step,
                     for k in idx_topk:
                         log += f" | idx top{k}: {idx_topk[k]:.1f}"
                     logger.info(log)
+
+                    #tb_logger.add_scalar("Evaluation", eval_loss, step)
                     #tb_logger.add_scalar("Training", curr_loss / (opt.eval_freq), step)
                     curr_loss = 0
 

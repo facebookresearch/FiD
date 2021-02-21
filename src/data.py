@@ -28,7 +28,10 @@ class Dataset(torch.utils.data.Dataset):
 
     def get_target(self, example):
         if 'target' in example:
-            return example['target'] + ' </s>'
+            target = example['target']
+            if target.isupper():
+                target = target.title()
+            return target + ' </s>'
         elif 'answers' in example:
             return random.choice(example['answers']) + ' </s>'
         else:
@@ -50,6 +53,7 @@ class Dataset(torch.utils.data.Dataset):
                 contexts = [question]
         else:
             passages, scores = None, None
+
 
         return {
             'index' : index,
@@ -133,12 +137,14 @@ def load_data(data_path=None, global_rank=-1, world_size=-1, maxload=-1):
             example = json.loads(example)
         if not 'id' in example:
             example['id'] = k
-        if not 'score' in example:
-            example['score'] = 1.0 / (k + 1)
+        for c in example['ctxs']:
+            if not 'score' in c:
+                c['score'] = 1.0 / (k + 1)
         examples.append(example)
     ## egrave: is this needed?
     if data_path is not None and data_path.endswith('.jsonl'):
         data.close()
+
     return examples
 
 class RetrieverCollator(object):

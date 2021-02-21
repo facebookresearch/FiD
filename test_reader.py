@@ -6,15 +6,15 @@
 
 import torch
 import transformers
-import slurm
-import logging
-import util
 import numpy as np
 from pathlib import Path
 import torch.distributed as dist
 from torch.utils.data import DataLoader, SequentialSampler
 
-from options import Options
+
+import src.slurm
+import src.util
+from src.options import Options
 import src.data
 import src.evaluation
 import src.model
@@ -44,6 +44,7 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
                 attention_mask=context_mask.cuda(),
                 max_length=50,
             )
+
             if opt.write_crossattention_scores:
                 crossattention_scores = model.get_crossattention_scores(context_mask.cuda())
 
@@ -65,14 +66,14 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
 
                 total += 1
             if (i + 1) % opt.eval_print_freq == 0:
-                log = f'{opt.eval_print_freq}, Process rank:{opt.global_rank}, {i+1} / {len(dataloader)}'
+                log = f'Process rank:{opt.global_rank}, {i+1} / {len(dataloader)}'
                 log += f' -- average = {np.mean(exactmatch):.3f}'
                 logger.warning(log)
 
     logger.warning(f'Process rank:{opt.global_rank}, total {total} -- average = {np.mean(exactmatch):.3f}')
     if opt.is_distributed:
         torch.distributed.barrier()
-    score, total = util.weighted_average(np.mean(exactmatch), total, opt)
+    score, total = src.util.weighted_average(np.mean(exactmatch), total, opt)
     
     return score, total
 
@@ -82,8 +83,8 @@ if __name__ == "__main__":
     options.add_reader_options()
     options.add_eval_options()
     opt = options.parse()
-    slurm.init_distributed_mode(opt)
-    slurm.init_signal_handler()
+    src.slurm.init_distributed_mode(opt)
+    src.slurm.init_signal_handler()
     opt.train_batch_size = opt.per_gpu_batch_size * max(1, opt.world_size)
 
     dir_path = Path(opt.checkpoint_dir)/opt.name
@@ -93,7 +94,7 @@ if __name__ == "__main__":
     dir_path.mkdir(parents=True, exist_ok=True)
     if opt.write_results:
         (dir_path / 'test_results').mkdir(parents=True, exist_ok=True)
-    logger = util.init_logger(opt.is_main, opt.is_distributed, Path(opt.checkpoint_dir) / opt.name / 'run.log')
+    logger = src.util.init_logger(opt.is_main, opt.is_distributed, Path(opt.checkpoint_dir) / opt.name / 'run.log')
     if not directory_exists and opt.is_main:
         options.print_options(opt)
 
@@ -132,7 +133,7 @@ if __name__ == "__main__":
     if opt.write_results and opt.is_main:
         glob_path = Path(opt.checkpoint_dir) / opt.name / 'test_results'
         write_path = Path(opt.checkpoint_dir) / opt.name / 'final_output.json'
-        util.write_output(glob_path, write_path) 
+        src.util.write_output(glob_path, write_path) 
     if opt.write_crossattention_scores:
-        util.save_distributed_dataset(eval_dataset.data, opt)
+        src.util.save_distributed_dataset(eval_dataset.data, opt)
 

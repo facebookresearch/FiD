@@ -8,17 +8,16 @@ import time
 import sys
 import torch
 import transformers
-import slurm
-import logging
-import util
 import numpy as np
-from options import Options
+from pathlib import Path
 from torch.utils.data import DataLoader, RandomSampler, DistributedSampler, SequentialSampler
-import options
+from src.options import Options
+
+import src.slurm
+import src.util
 import src.evaluation
 import src.data
 import src.model
-from pathlib import Path
 
 
 def train(model, optimizer, scheduler, step, train_dataset, eval_dataset, opt, collator, best_dev_em, checkpoint_path):
@@ -64,7 +63,7 @@ def train(model, optimizer, scheduler, step, train_dataset, eval_dataset, opt, c
                 scheduler.step()
                 model.zero_grad()
 
-            train_loss = util.average_main(train_loss, opt)
+            train_loss = src.util.average_main(train_loss, opt)
             curr_loss += train_loss.item()
 
             if step % opt.eval_freq == 0:
@@ -73,7 +72,7 @@ def train(model, optimizer, scheduler, step, train_dataset, eval_dataset, opt, c
                 if opt.is_main:
                     if dev_em > best_dev_em:
                         best_dev_em = dev_em
-                        util.save(model, optimizer, scheduler, step, best_dev_em,
+                        src.util.save(model, optimizer, scheduler, step, best_dev_em,
                                   opt, checkpoint_path, 'best_dev')
                     log = f"{step} / {opt.total_steps} |"
                     log += f"train: {curr_loss/opt.eval_freq:.3f} |"
@@ -86,7 +85,7 @@ def train(model, optimizer, scheduler, step, train_dataset, eval_dataset, opt, c
                         tb_logger.add_scalar("Training", curr_loss / (opt.eval_freq), step)
 
             if opt.is_main and step % opt.save_freq == 0:
-                util.save(model, optimizer, scheduler, step, best_dev_em,
+                src.util.save(model, optimizer, scheduler, step, best_dev_em,
                           opt, checkpoint_path, f"step-{step}")
             if step > opt.total_steps:
                 break
@@ -121,7 +120,7 @@ def evaluate(model, dataset, tokenizer, collator, opt):
                 total += 1
                 exactmatch.append(score)
 
-    exactmatch, total = util.weighted_average(np.mean(exactmatch), total, opt)
+    exactmatch, total = src.util.weighted_average(np.mean(exactmatch), total, opt)
     return exactmatch
 
 if __name__ == "__main__":
@@ -132,8 +131,8 @@ if __name__ == "__main__":
     #opt = options.get_options(use_reader=True, use_optim=True)
 
     torch.manual_seed(opt.seed)
-    slurm.init_distributed_mode(opt)
-    slurm.init_signal_handler()
+    src.slurm.init_distributed_mode(opt)
+    src.slurm.init_signal_handler()
 
     checkpoint_path = Path(opt.checkpoint_dir)/opt.name
     checkpoint_exists = checkpoint_path.exists()
@@ -144,7 +143,7 @@ if __name__ == "__main__":
     #    options.print_options(opt)
     #checkpoint_path, checkpoint_exists = util.get_checkpoint_path(opt)
 
-    logger = util.init_logger(
+    logger = src.util.init_logger(
         opt.is_main,
         opt.is_distributed,
         checkpoint_path / 'run.log'
@@ -179,16 +178,16 @@ if __name__ == "__main__":
         model = src.model.FiDT5(t5.config)
         model.load_t5(t5.state_dict())
         model = model.to(opt.local_rank)
-        optimizer, scheduler = util.set_optim(opt, model)
+        optimizer, scheduler = src.util.set_optim(opt, model)
         step, best_dev_em = 0, 0.0
     elif opt.model_path == "none":
         load_path = checkpoint_path / 'checkpoint' / 'latest'
         model, optimizer, scheduler, opt_checkpoint, step, best_dev_em = \
-            util.load(model_class, load_path, opt, reset_params=False)
+            src.util.load(model_class, load_path, opt, reset_params=False)
         logger.info(f"Model loaded from {load_path}")
     else:
         model, optimizer, scheduler, opt_checkpoint, step, best_dev_em = \
-            util.load(model_class, opt.model_path, opt, reset_params=True)
+            src.util.load(model_class, opt.model_path, opt, reset_params=True)
         logger.info(f"Model loaded from {opt.model_path}")
 
     model.set_checkpoint(opt.use_checkpoint)

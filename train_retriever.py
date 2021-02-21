@@ -16,9 +16,11 @@ import torch.distributed as dist
 from torch.utils.tensorboard import SummaryWriter
 from options import Options
 from torch.utils.data import DataLoader, RandomSampler, DistributedSampler, SequentialSampler
-import retriever.evaluation
-import retriever.data
-import retriever.model
+
+
+import src.evaluation
+import src.data
+import src.model
 from pathlib import Path
 
 

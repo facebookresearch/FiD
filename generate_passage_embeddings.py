@@ -18,8 +18,8 @@ import torch
 import transformers
 import src.model
 import src.data
-import util
-import slurm
+import src.util
+import src.slurm
 
 
 from torch.utils.data import DataLoader
@@ -67,10 +67,10 @@ def load_passages(args):
 
 
 def main(opt):
-    logger = util.init_logger(is_main=True)
+    logger = src.util.init_logger(is_main=True)
     tokenizer = transformers.BertTokenizerFast.from_pretrained('bert-base-uncased')
     model_class = src.model.Retriever
-    model, _, _, _, _, _ = util.load(model_class, opt.model_path, opt)
+    model, _, _, _, _, _ = src.util.load(model_class, opt.model_path, opt)
     
     model.eval()
     model = model.to(opt.device)
@@ -116,6 +116,6 @@ if __name__ == '__main__':
     parser.add_argument('--no_fp16', action='store_true')
     args = parser.parse_args()
 
-    slurm.init_distributed_mode(args)
+    src.slurm.init_distributed_mode(args)
 
     main(args)

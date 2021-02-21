@@ -17,11 +17,11 @@ import numpy as np
 import torch
 import transformers
 
-import slurm
-import util
+import src.slurm
+import src.util
 import src.model
 import src.data
-import retriever.index
+import src.index
 
 from torch.utils.data import DataLoader
 
@@ -142,21 +142,21 @@ def main(opt):
 
     index_buffer_sz = args.index_buffer
 
-    index = retriever.index.DenseFlatIndexer(model.config.indexing_dimension)
+    index = src.index.DenseFlatIndexer(model.config.indexing_dimension)
 
     # index all passages
     input_paths = glob.glob(args.passages_embeddings)
     input_paths = sorted(input_paths)
     index_path = Path(input_paths[0]).parent / 'index.faiss'
     if args.save_or_load_index and index_path.exists():
-        retriever.index.deserialize_from(index_path)
+        src.index.deserialize_from(index_path)
     else:
         logger.info(f'Indexing passages from files {input_paths}')
         start_time_indexing = time.time()
         index_encoded_data(index, input_paths, maxload=args.maxload)
         logger.info(f'Indexing time: {time.time()-start_time_indexing:.1f} s.')
         if args.save_or_load_index:
-            retriever.index.serialize(index_path)
+            src.index.serialize(index_path)
 
     questions_embedding = embed_questions(opt, data, model, tokenizer)
 
@@ -204,5 +204,5 @@ if __name__ == '__main__':
     parser.add_argument('--question_maxlength', type=int, default=40)
 
     args = parser.parse_args()
-    slurm.init_distributed_mode(args)
+    src.slurm.init_distributed_mode(args)
     main(args)

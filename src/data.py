@@ -29,8 +29,6 @@ class Dataset(torch.utils.data.Dataset):
     def get_target(self, example):
         if 'target' in example:
             target = example['target']
-            if target.isupper():
-                target = target.title()
             return target + ' </s>'
         elif 'answers' in example:
             return random.choice(example['answers']) + ' </s>'

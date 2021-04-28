@@ -1,0 +1,4 @@
+numpy
+torch
+faiss
+transformers==3.0.2

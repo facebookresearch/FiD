@@ -169,25 +169,21 @@ if __name__ == "__main__":
         passage_maxlength=opt.passage_maxlength, 
         question_maxlength=opt.question_maxlength
     )
-    train_examples = src.data.load_data(opt.train_data, maxload=opt.maxload)
+    train_examples = src.data.load_data(opt.train_data)
     train_dataset = src.data.Dataset(train_examples, opt.n_context)
     eval_examples = src.data.load_data(
         opt.eval_data, 
         global_rank=opt.global_rank, 
         world_size=opt.world_size, 
-        maxload=opt.maxload
     )
     eval_dataset = src.data.Dataset(eval_examples, opt.n_context)
-    logger.info(f"Number of examples in train set: {len(train_dataset)}.")
-    logger.info(f"Number of examples in eval set: {len(eval_dataset)}.")
-
 
     global_step = 0
     best_eval_loss = np.inf
     config = src.model.RetrieverConfig(
         indexing_dimension=opt.indexing_dimension,
-        apply_question_mask=opt.apply_question_mask,
-        apply_passage_mask=opt.apply_passage_mask,
+        apply_question_mask=not opt.no_question_mask,
+        apply_passage_mask=not opt.no_passage_mask,
         extract_cls=opt.extract_cls,
         projection=not opt.no_projection,
     )
@@ -207,6 +203,11 @@ if __name__ == "__main__":
             src.util.load(model_class, opt.model_path, opt, reset_params=True)
         logger.info(f"Model loaded from {opt.model_path}")
 
+    model.proj = torch.nn.Linear(768, 256)
+    model.norm = torch.nn.LayerNorm(256)
+    model.config.indexing_dimension = 256
+    model = model.to(opt.device)
+    optimizer, scheduler = src.util.set_optim(opt, model)
 
     if opt.is_distributed:
         model = torch.nn.parallel.DistributedDataParallel(

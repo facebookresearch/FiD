@@ -19,7 +19,8 @@ class Options():
     def add_optim_options(self):
         self.parser.add_argument('--warmup_steps', type=int, default=1000)
         self.parser.add_argument('--total_steps', type=int, default=1000)
-        self.parser.add_argument('--scheduler_steps', type=int, default=None, help='total number of step for the scheduler, if None then scheduler_total_step = total_step')
+        self.parser.add_argument('--scheduler_steps', type=int, default=None, 
+                        help='total number of step for the scheduler, if None then scheduler_total_step = total_step')
         self.parser.add_argument('--accumulation_steps', type=int, default=1)
         self.parser.add_argument('--dropout', type=float, default=0.1, help='dropout rate')
         self.parser.add_argument('--lr', type=float, default=1e-4, help='learning rate')
@@ -31,29 +32,37 @@ class Options():
 
     def add_eval_options(self):
         self.parser.add_argument('--write_results', action='store_true', help='save results')
-        self.parser.add_argument('--write_crossattention_scores', action='store_true', help='save dataset with cross-attention scores')
+        self.parser.add_argument('--write_crossattention_scores', action='store_true', 
+                        help='save dataset with cross-attention scores')
 
     def add_reader_options(self):
         self.parser.add_argument('--train_data', type=str, default='none', help='path of train data')
         self.parser.add_argument('--eval_data', type=str, default='none', help='path of eval data')
         self.parser.add_argument('--model_size', type=str, default='base')
         self.parser.add_argument('--use_checkpoint', action='store_true', help='use checkpoint in the encoder')
-        self.parser.add_argument('--text_maxlength', type=int, default=200, help='maximum number of tokens in text segments (question+passage)')
-        self.parser.add_argument('--answer_maxlength', type=int, default=-1, help='maximum number of tokens used to train the model, no truncation if -1')
-        self.parser.add_argument('--no_title', action='store_true', help='article titles not included in passages')
+        self.parser.add_argument('--text_maxlength', type=int, default=200, 
+                        help='maximum number of tokens in text segments (question+passage)')
+        self.parser.add_argument('--answer_maxlength', type=int, default=-1, 
+                        help='maximum number of tokens used to train the model, no truncation if -1')
+        self.parser.add_argument('--no_title', action='store_true', 
+                        help='article titles not included in passages')
         self.parser.add_argument('--n_context', type=int, default=1)
 
     def add_retriever_options(self):
         self.parser.add_argument('--train_data', type=str, default='none', help='path of train data')
         self.parser.add_argument('--eval_data', type=str, default='none', help='path of eval data')
         self.parser.add_argument('--indexing_dimension', type=int, default=768)
-        self.parser.add_argument('--no_projection', action='store_true', help='No addition Linear layer and layernorm, only works if indexing size equals 768')
-        self.parser.add_argument('--question_maxlength', type=int, default=40, help='maximum number of tokens in questions')
-        self.parser.add_argument('--passage_maxlength', type=int, default=200, help='maximum number of tokens in passages')
-        self.parser.add_argument('--apply_question_mask', action='store_true')
-        self.parser.add_argument('--apply_passage_mask', action='store_true')
+        self.parser.add_argument('--no_projection', action='store_true', 
+                        help='No addition Linear layer and layernorm, only works if indexing size equals 768')
+        self.parser.add_argument('--question_maxlength', type=int, default=40, 
+                        help='maximum number of tokens in questions')
+        self.parser.add_argument('--passage_maxlength', type=int, default=200, 
+                        help='maximum number of tokens in passages')
+        self.parser.add_argument('--no_question_mask', action='store_true')
+        self.parser.add_argument('--no_passage_mask', action='store_true')
         self.parser.add_argument('--extract_cls', action='store_true')
-        self.parser.add_argument('--no_title', action='store_true', help='article titles not included in passages')
+        self.parser.add_argument('--no_title', action='store_true', 
+                        help='article titles not included in passages')
         self.parser.add_argument('--n_context', type=int, default=1)
 
 
@@ -64,21 +73,22 @@ class Options():
         self.parser.add_argument('--model_path', type=str, default='none', help='path for retraining')
 
         # dataset parameters
-        self.parser.add_argument("--per_gpu_batch_size", default=1, type=int, help="Batch size per GPU/CPU for training.")
+        self.parser.add_argument("--per_gpu_batch_size", default=1, type=int, 
+                        help="Batch size per GPU/CPU for training.")
         self.parser.add_argument('--maxload', type=int, default=-1)
 
         self.parser.add_argument("--local_rank", type=int, default=-1,
-                            help="For distributed training: local_rank")
+                        help="For distributed training: local_rank")
         self.parser.add_argument("--main_port", type=int, default=-1,
-                            help="Master port (for multi-node SLURM jobs)")
+                        help="Main port (for multi-node SLURM jobs)")
         self.parser.add_argument('--seed', type=int, default=0, help="random seed for initialization")
         # training parameters
         self.parser.add_argument('--eval_freq', type=int, default=500,
-                            help='evaluate model every <eval_freq> steps during training')
+                        help='evaluate model every <eval_freq> steps during training')
         self.parser.add_argument('--save_freq', type=int, default=5000,
-                            help='save model every <save_freq> steps during training')
+                        help='save model every <save_freq> steps during training')
         self.parser.add_argument('--eval_print_freq', type=int, default=1000,
-                            help='print intermdiate results of evaluation every <eval_print_freq> steps')
+                        help='print intermdiate results of evaluation every <eval_print_freq> steps')
 
 
     def print_options(self, opt):

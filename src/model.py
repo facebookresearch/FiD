@@ -283,19 +283,16 @@ class Retriever(transformers.PreTrainedModel):
         assert config.projection or config.indexing_dimension == 768, \
             'If no projection then indexing dimension must be equal to 768'
         self.config = config
-        self.apply_passage_mask = config.apply_passage_mask
-        self.apply_question_mask = config.apply_question_mask
-        self.extract_cls = config.extract_cls
         if initialize_wBERT:
             self.model = transformers.BertModel.from_pretrained('bert-base-uncased')
         else:
             self.model = transformers.BertModel(config)
-        if not self.config.projection:
+        if self.config.projection:
             self.proj = nn.Linear(
                 self.model.config.hidden_size,
                 self.config.indexing_dimension
             )
-            self.norm = nn.LayerNorm(self.config.output_size)
+            self.norm = nn.LayerNorm(self.config.indexing_dimension)
         self.loss_fct = torch.nn.KLDivLoss()
 
     def forward(self,
@@ -307,8 +304,8 @@ class Retriever(transformers.PreTrainedModel):
         question_output = self.embed_text(
             text_ids=question_ids,
             text_mask=question_mask,
-            apply_mask=self.apply_question_mask,
-            extract_cls=self.extract_cls,
+            apply_mask=self.config.apply_question_mask,
+            extract_cls=self.config.extract_cls,
         )
         bsz, n_passages, plen = passage_ids.size()
         passage_ids = passage_ids.view(bsz * n_passages, plen)
@@ -316,8 +313,8 @@ class Retriever(transformers.PreTrainedModel):
         passage_output = self.embed_text(
             text_ids=passage_ids,
             text_mask=passage_mask,
-            apply_mask=self.apply_passage_mask,
-            extract_cls=self.extract_cls,
+            apply_mask=self.config.apply_passage_mask,
+            extract_cls=self.config.extract_cls,
         )
 
         score = torch.einsum(
@@ -341,7 +338,7 @@ class Retriever(transformers.PreTrainedModel):
         if type(text_output) is not tuple:
             text_output.to_tuple()
         text_output = text_output[0]
-        if not self.config.projection:
+        if self.config.projection:
             text_output = self.proj(text_output)
             text_output = self.norm(text_output)
 

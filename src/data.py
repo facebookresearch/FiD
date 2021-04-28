@@ -119,7 +119,7 @@ class Collator(object):
 
         return (index, target_ids, target_mask, passage_ids, passage_masks)
 
-def load_data(data_path=None, global_rank=-1, world_size=-1, maxload=-1):
+def load_data(data_path=None, global_rank=-1, world_size=-1):
     assert data_path
     if data_path.endswith('.jsonl'):
         data = open(data_path, 'r')
@@ -130,8 +130,6 @@ def load_data(data_path=None, global_rank=-1, world_size=-1, maxload=-1):
     for k, example in enumerate(data):
         if global_rank > -1 and not k%world_size==global_rank:
             continue
-        if maxload > -1 and k >= maxload:
-            break
         if data_path is not None and data_path.endswith('.jsonl'):
             example = json.loads(example)
         if not 'id' in example:

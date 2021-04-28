@@ -31,7 +31,7 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
     exactmatch = []
     if opt.write_results:
         write_path = Path(opt.checkpoint_dir) / opt.name / 'test_results'
-        fw = open(write_path / '%d.txt'%opt.global_rank, 'a')
+        fw = open(write_path / ('%d.txt'%opt.global_rank), 'a')
     with torch.no_grad():
         for i, batch in enumerate(dataloader):
             (idx, _, _, context_ids, context_mask) = batch
@@ -50,27 +50,27 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
 
             for k, o in enumerate(outputs):
                 ans = tokenizer.decode(o, skip_special_tokens=True)
-                example = dataset.get_example(idx[k])
-                question = example['question']
-                gold = example['answers']
-                exid = example['id']
-                score = src.evaluation.ems(ans, gold)
-                exactmatch.append(score)
+                example = dataset.data[idx[k]]
+                if 'answers' in example:
+                    score = src.evaluation.ems(ans, example['answers'])
+                    exactmatch.append(score)
 
                 if opt.write_results:
-                    fw.write(str(exid) + "\t" + ans + '\n')
+                    fw.write(str(example['id']) + "\t" + ans + '\n')
                 if opt.write_crossattention_scores:
-                    ctxs = example['ctxs']
                     for j in range(context_ids.size(1)):
-                        ctxs[j]['score'] = crossattention_scores[k, j].item()
+                        example['ctxs'][j]['score'] = crossattention_scores[k, j].item()
 
                 total += 1
             if (i + 1) % opt.eval_print_freq == 0:
                 log = f'Process rank:{opt.global_rank}, {i+1} / {len(dataloader)}'
-                log += f' -- average = {np.mean(exactmatch):.3f}'
+                if len(exactmatch) == 0:
+                    log += '| no answer to compute scores'
+                else:
+                    log += f' | average = {np.mean(exactmatch):.3f}'
                 logger.warning(log)
 
-    logger.warning(f'Process rank:{opt.global_rank}, total {total} -- average = {np.mean(exactmatch):.3f}')
+    logger.warning(f'Process rank:{opt.global_rank}, total {total} | average = {np.mean(exactmatch):.3f}')
     if opt.is_distributed:
         torch.distributed.barrier()
     score, total = src.util.weighted_average(np.mean(exactmatch), total, opt)
@@ -132,7 +132,7 @@ if __name__ == "__main__":
 
     if opt.write_results and opt.is_main:
         glob_path = Path(opt.checkpoint_dir) / opt.name / 'test_results'
-        write_path = Path(opt.checkpoint_dir) / opt.name / 'final_output.json'
+        write_path = Path(opt.checkpoint_dir) / opt.name / 'final_output.txt'
         src.util.write_output(glob_path, write_path) 
     if opt.write_crossattention_scores:
         src.util.save_distributed_dataset(eval_dataset.data, opt)

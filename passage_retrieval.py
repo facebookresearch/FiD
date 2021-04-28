@@ -42,8 +42,8 @@ def embed_questions(opt, data, model, tokenizer):
             output = model.embed_text(
                 text_ids=question_ids.to(opt.device).view(-1, question_ids.size(-1)), 
                 text_mask=question_mask.to(opt.device).view(-1, question_ids.size(-1)), 
-                apply_mask=model.apply_question_mask,
-                extract_cls=model.extract_cls,
+                apply_mask=model.config.apply_question_mask,
+                extract_cls=model.config.extract_cls,
             )
             embedding.append(output)
 

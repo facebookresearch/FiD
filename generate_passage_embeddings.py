@@ -38,7 +38,8 @@ def embed_passages(opt, passages, model, tokenizer):
             embeddings = model.embed_text(
                 text_ids=text_ids.cuda(), 
                 text_mask=text_mask.cuda(), 
-                apply_mask=model.apply_passage_mask
+                apply_mask=model.config.apply_passage_mask,
+                extract_cls=model.config.extract_cls,
             )
             embeddings = embeddings.cpu()
             total += len(ids)

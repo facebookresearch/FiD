@@ -5,11 +5,6 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-"""
- Set of utilities for Q&A results validation tasks
- Retriver passage validation and Reader predicted answer validation
-"""
-
 import collections
 import logging
 import regex
@@ -19,6 +14,10 @@ from functools import partial
 from multiprocessing import Pool as ProcessPool
 from typing import Tuple, List, Dict
 import numpy as np
+
+"""
+Evaluation code from DPR: https://github.com/facebookresearch/DPR
+"""
 
 class SimpleTokenizer(object):
     ALPHA_NUM = r'[\p{L}\p{N}\p{M}]+'

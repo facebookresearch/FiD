@@ -63,6 +63,31 @@ Performance of the pretrained models:
   <tr><td>large</td><td>52.7</td><td>54.4</td><td>72.5</td><td>72.5</td></tr>
 </table>
 
+The retriever obtained by distilling the reader in the retriever obtains the following results:
+
+<table>
+  <tr>
+    <td colspan="3">NaturalQuestions</td>
+    <td colspan="3">TriviaQA</td>
+  </tr>
+  <tr>
+      <td>R@5</td>
+      <td>R@20</td>
+      <td>R@100</td>
+      <td>R@5</td>
+      <td>R@20</td>
+      <td>R@100</td>
+  </tr>
+  <tr>
+      <td>73.8</td>
+      <td>84.3</td>
+      <td>89.3</td>
+      <td>77.0</td>
+      <td>83.6</td>
+      <td>87.7</td>
+  </tr>
+</table>
+
 
 
 # I. Fusion-in-Decoder
@@ -190,10 +215,9 @@ We found that iterating the four steps here can improve performances, depending 
 @misc{izacard2020leveraging,
       title={Leveraging Passage Retrieval with Generative Models for Open Domain Question Answering},
       author={Gautier Izacard and Edouard Grave},
+      url = {https://arxiv.org/abs/2007.0128},
       year={2020},
-      eprint={2007.01282},
-      archivePrefix={arXiv},
-      primaryClass={cs.CL}
+      publisher = {arXiv},
 }
 ```
 
@@ -203,10 +227,21 @@ We found that iterating the four steps here can improve performances, depending 
 @misc{izacard2020distilling,
       title={Distilling Knowledge from Reader to Retriever for Question Answering},
       author={Gautier Izacard and Edouard Grave},
+      url = {https://arxiv.org/abs/2012.04584},
       year={2020},
-      eprint={2012.04584},
-      archivePrefix={arXiv},
-      primaryClass={cs.CL}
+      publisher = {arXiv},
+}
+```
+
+[3] G. Izacard, F. Petroni, L. Hosseini, N. De Cao, S. Riedel, E. Grave [*A Memory Efficient Baseline for Open Domain Question Answering*](https://arxiv.org/abs/2012.15156)
+
+```bibtex
+@misc{izacard2020distilling,
+      title={A Memory Efficient Baseline for Open Domain Question Answering},
+      author={Gautier Izacard and Fabio Petroni and Lucas Hosseini and Nicola De Cao and Sebastian Riedel and Edouard Grave},
+      url = {https://arxiv.org/abs/2012.15156},
+      year={2020},
+      publisher = {arXiv},
 }
 ```
 

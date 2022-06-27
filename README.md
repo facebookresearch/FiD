@@ -236,7 +236,7 @@ We found that iterating the four steps here can improve performances, depending 
 [3] G. Izacard, F. Petroni, L. Hosseini, N. De Cao, S. Riedel, E. Grave [*A Memory Efficient Baseline for Open Domain Question Answering*](https://arxiv.org/abs/2012.15156)
 
 ```bibtex
-@misc{izacard2020distilling,
+@misc{izacard2020memory,
       title={A Memory Efficient Baseline for Open Domain Question Answering},
       author={Gautier Izacard and Fabio Petroni and Lucas Hosseini and Nicola De Cao and Sebastian Riedel and Edouard Grave},
       url = {https://arxiv.org/abs/2012.15156},

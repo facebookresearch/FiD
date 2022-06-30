@@ -35,7 +35,7 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
     with torch.no_grad():
         for i, batch in enumerate(dataloader):
             (idx, _, _, context_ids, context_mask) = batch
-
+            
             if opt.write_crossattention_scores:
                 model.reset_score_storage()
 
@@ -101,7 +101,7 @@ if __name__ == "__main__":
 
     tokenizer = transformers.T5Tokenizer.from_pretrained('t5-base', return_dict=False)
 
-    collator_function = src.data.Collator(opt.text_maxlength, tokenizer)
+    collator_function = src.data.Collator(opt.text_maxlength, tokenizer, pad_to_max_length=opt.pad_to_max_length)
     eval_examples = src.data.load_data(
         opt.eval_data, 
         global_rank=opt.global_rank, #use the global rank and world size attibutes to split the eval set on multiple gpus

@@ -154,7 +154,7 @@ if __name__ == "__main__":
 
     #load data
     tokenizer = transformers.T5Tokenizer.from_pretrained(model_name)
-    collator = src.data.Collator(opt.text_maxlength, tokenizer, answer_maxlength=opt.answer_maxlength)
+    collator = src.data.Collator(opt.text_maxlength, tokenizer, answer_maxlength=opt.answer_maxlength, pad_to_max_length=opt.pad_to_max_length)
 
     # use golbal rank and world size to split the eval set on multiple gpus
     train_examples = src.data.load_data(

@@ -8,6 +8,7 @@ import torch
 import random
 import json
 import numpy as np
+import torch.nn.functional as F
 
 class Dataset(torch.utils.data.Dataset):
     def __init__(self,
@@ -70,28 +71,45 @@ class Dataset(torch.utils.data.Dataset):
     def get_example(self, index):
         return self.data[index]
 
-def encode_passages(batch_text_passages, tokenizer, max_length):
+def get_padded_tensor(ten_list, value = 0):
+    max_len = max([x.shape[1] for x in ten_list])
+    padded_list = []
+    for tensor in ten_list:
+        if(tensor.shape[1] < max_len):
+            tensor = F.pad(input=tensor, pad=(0, max_len - tensor.shape[1], 0, 0), mode='constant', value=value)
+        padded_list.append(tensor)
+    return padded_list
+    
+def encode_passages(batch_text_passages, tokenizer, max_length, pad_to_max_length):
+    # if padding to the max length, no padding to max passage length, and vice versa.
+    padding = not pad_to_max_length
+    
     passage_ids, passage_masks = [], []
     for k, text_passages in enumerate(batch_text_passages):
         p = tokenizer.batch_encode_plus(
             text_passages,
             max_length=max_length,
-            pad_to_max_length=True,
+            pad_to_max_length=pad_to_max_length,
+            padding=padding,
             return_tensors='pt',
             truncation=True
         )
-        passage_ids.append(p['input_ids'][None])
-        passage_masks.append(p['attention_mask'][None])
+        passage_ids.append(p['input_ids'])
+        passage_masks.append(p['attention_mask'])
 
-    passage_ids = torch.cat(passage_ids, dim=0)
-    passage_masks = torch.cat(passage_masks, dim=0)
+    passage_ids = get_padded_tensor(passage_ids, value=0)
+    passage_masks = get_padded_tensor(passage_masks, value=0)
+
+    passage_ids = torch.stack(passage_ids)
+    passage_masks = torch.stack(passage_masks)
     return passage_ids, passage_masks.bool()
 
 class Collator(object):
-    def __init__(self, text_maxlength, tokenizer, answer_maxlength=20):
+    def __init__(self, text_maxlength, tokenizer, answer_maxlength=20, pad_to_max_length=False):
         self.tokenizer = tokenizer
         self.text_maxlength = text_maxlength
         self.answer_maxlength = answer_maxlength
+        self.pad_to_max_length = pad_to_max_length
 
     def __call__(self, batch):
         assert(batch[0]['target'] != None)
@@ -115,7 +133,8 @@ class Collator(object):
         text_passages = [append_question(example) for example in batch]
         passage_ids, passage_masks = encode_passages(text_passages,
                                                      self.tokenizer,
-                                                     self.text_maxlength)
+                                                     self.text_maxlength,
+                                                     self.pad_to_max_length)
 
         return (index, target_ids, target_mask, passage_ids, passage_masks)
 

@@ -89,6 +89,7 @@ class Options():
                         help='save model every <save_freq> steps during training')
         self.parser.add_argument('--eval_print_freq', type=int, default=1000,
                         help='print intermdiate results of evaluation every <eval_print_freq> steps')
+        self.parser.add_argument('--pad_to_max_length', action='store_true', help='Should the passages all be padded to the max length provided (True value here), or to the max length of the longest passage? (False value here).')
 
 
     def print_options(self, opt):

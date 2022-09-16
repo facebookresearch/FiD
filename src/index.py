@@ -52,7 +52,7 @@ class Indexer(object):
         meta_file = dir_path / 'index_meta.dpr'
         logger.info(f'Serializing index to {index_file}, meta data to {meta_file}')
 
-        faiss.write_index(self.index, index_file)
+        faiss.write_index(self.index, str(index_file))
         with open(meta_file, mode='wb') as f:
             pickle.dump(self.index_id_to_db_id, f)
 
@@ -61,7 +61,7 @@ class Indexer(object):
         meta_file = dir_path / 'index_meta.dpr'
         logger.info(f'Loading index from {index_file}, meta data from {meta_file}')
 
-        self.index = faiss.read_index(index_file)
+        self.index = faiss.read_index(str(index_file))
         logger.info('Loaded index of type %s and size %d', type(self.index), self.index.ntotal)
 
         with open(meta_file, "rb") as reader:

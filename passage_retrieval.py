@@ -143,7 +143,7 @@ def main(opt):
         index_encoded_data(index, input_paths, opt.indexing_batch_size)
         logger.info(f'Indexing time: {time.time()-start_time_indexing:.1f} s.')
         if args.save_or_load_index:
-            src.index.serialize(embeddings_dir)
+            index.serialize(embeddings_dir)
 
     questions_embedding = embed_questions(opt, data, model, tokenizer)
 

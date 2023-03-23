@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env bash
 # Copyright (c) Facebook, Inc. and its affiliates.
 # All rights reserved.
 #

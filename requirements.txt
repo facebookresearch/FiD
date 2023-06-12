@@ -1,5 +1,5 @@
 numpy
 torch
 faiss-cpu
-transformers==3.0.2
+transformers==4.30.0
 tensorboard

@@ -7,6 +7,7 @@
 import os
 import errno
 import torch
+import shutil
 import sys
 import logging
 import json
@@ -67,6 +68,7 @@ def save(model, optimizer, scheduler, step, best_eval_metric, opt, dir_path, nam
     }
     torch.save(checkpoint, fp)
     symlink_force(epoch_path, cp)
+    print(f'# [info] saved checkpoint: {epoch_path}')
 
 
 def load(model_class, dir_path, opt, reset_params=False):
@@ -172,7 +174,13 @@ def weighted_average(x, count, opt):
 
 
 def write_output(glob_path, output_path):
-    files = list(glob_path.glob('*.txt'))
+    # files = list(glob_path.glob('*.txt'))
+    files = list()
+    for file in list(glob_path.glob('*')):
+        if file.stem.endswith(".txt"):
+            files.append(file)
+        elif file.is_dir():
+            files += list(file.glob('*.txt'))
     files.sort()
     with open(output_path, 'w') as outfile:
         for path in files:
@@ -181,7 +189,9 @@ def write_output(glob_path, output_path):
                 for line in lines:
                     outfile.write(line)
             path.unlink()
-    glob_path.rmdir()
+    # glob_path.rmdir()
+    shutil.rmtree(glob_path)
+    
 
 
 def save_distributed_dataset(data, opt):

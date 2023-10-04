@@ -4,13 +4,15 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+from datetime import datetime
+import json
 import torch
 import transformers
 import numpy as np
 from pathlib import Path
 import torch.distributed as dist
 from torch.utils.data import DataLoader, SequentialSampler
-
+from tqdm import tqdm
 
 import src.slurm
 import src.util
@@ -18,6 +20,8 @@ from src.options import Options
 import src.data
 import src.evaluation
 import src.model
+
+datetime_str = datetime.now().strftime("%Y%m%d_%H%M%S")
 
 def evaluate(model, dataset, dataloader, tokenizer, opt):
     loss, curr_loss = 0.0, 0.0
@@ -30,10 +34,11 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
     total = 0
     exactmatch = []
     if opt.write_results:
-        write_path = Path(opt.checkpoint_dir) / opt.name / 'test_results'
+        write_path = Path(opt.checkpoint_dir) / opt.name / f'test_results/{datetime_str}'
         fw = open(write_path / ('%d.txt'%opt.global_rank), 'a')
+        fw.write(f'id\tquestion\tgts\tpreds\tcontexts\n')
     with torch.no_grad():
-        for i, batch in enumerate(dataloader):
+        for i, batch in tqdm(enumerate(dataloader), initial=0, total=len(dataloader), desc=f'Evaluating'):
             (idx, _, _, context_ids, context_mask) = batch
 
             if opt.write_crossattention_scores:
@@ -56,7 +61,9 @@ def evaluate(model, dataset, dataloader, tokenizer, opt):
                     exactmatch.append(score)
 
                 if opt.write_results:
-                    fw.write(str(example['id']) + "\t" + ans + '\n')
+                    # fw.write(str(example['id']) + "\t" + ans + '\n')
+                    row = f'{example["id"]}\t{score}\t{example["question"]}\t{" ".join(example["answers"]).strip()}\t{ans}\t{json.dumps(example["ctxs"])}\n'
+                    fw.write(row)
                 if opt.write_crossattention_scores:
                     for j in range(context_ids.size(1)):
                         example['ctxs'][j]['score'] = crossattention_scores[k, j].item()
@@ -83,23 +90,38 @@ if __name__ == "__main__":
     options.add_reader_options()
     options.add_eval_options()
     opt = options.parse()
+    opt.hf_cache_path = "/mnt/ocr-nfsx1/public_datasets/.cache"
+    # NaturalQuestions
+    opt.model_path = "/mnt/ocr-nfsx1/public/hodong.lee/cloned/FiD/pretrained_models/nq_reader_large/"
+    opt.eval_data = "/mnt/ocr-nfsx1/public/hodong.lee/cloned/FiD/open_domain_data/NQ/train.json"
+    # opt.eval_data = "/mnt/ocr-nfsx1/public/hodong.lee/cloned/FiD/open_domain_data/NQ/dev.json"
+    # opt.eval_data = "/mnt/ocr-nfsx1/public/hodong.lee/cloned/FiD/open_domain_data/NQ/test.json"
+    # # CosmosQA
+    # opt.model_path = "/mnt/ocr-nfsx1/public/hodong.lee/cloned/FiD/checkpoint/cosmosqa/cosmosqa_large_test/checkpoint/step-5/"
+    # opt.eval_data = "/mnt/ocr-nfsx1/public/hodong.lee/datasets/cosmosQA/FiD_format__test.json"
+    opt.name = f'{Path(opt.model_path).stem}/{Path(opt.eval_data).stem}'
+    opt.per_gpu_batch_size = 4
+    opt.n_context = 100
+    opt.write_results = True
+    
     src.slurm.init_distributed_mode(opt)
     src.slurm.init_signal_handler()
     opt.train_batch_size = opt.per_gpu_batch_size * max(1, opt.world_size)
 
-    dir_path = Path(opt.checkpoint_dir)/opt.name
+    dir_path = Path(opt.checkpoint_dir) / opt.name / f'test_results/{datetime_str}'
     directory_exists = dir_path.exists()
     if opt.is_distributed:
         torch.distributed.barrier()
     dir_path.mkdir(parents=True, exist_ok=True)
     if opt.write_results:
-        (dir_path / 'test_results').mkdir(parents=True, exist_ok=True)
+        # (dir_path / 'test_results').mkdir(parents=True, exist_ok=True)
+        dir_path.mkdir(parents=True, exist_ok=True)
     logger = src.util.init_logger(opt.is_main, opt.is_distributed, Path(opt.checkpoint_dir) / opt.name / 'run.log')
     if not directory_exists and opt.is_main:
         options.print_options(opt)
 
 
-    tokenizer = transformers.T5Tokenizer.from_pretrained('t5-base', return_dict=False)
+    tokenizer = transformers.T5Tokenizer.from_pretrained('t5-base', return_dict=False, cache_dir=opt.hf_cache_path)
 
     collator_function = src.data.Collator(opt.text_maxlength, tokenizer)
     eval_examples = src.data.load_data(

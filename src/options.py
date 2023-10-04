@@ -19,6 +19,7 @@ class Options():
     def add_optim_options(self):
         self.parser.add_argument('--warmup_steps', type=int, default=1000)
         self.parser.add_argument('--total_steps', type=int, default=1000)
+        self.parser.add_argument('--total_epochs', type=int, default=None)
         self.parser.add_argument('--scheduler_steps', type=int, default=None, 
                         help='total number of step for the scheduler, if None then scheduler_total_step = total_step')
         self.parser.add_argument('--accumulation_steps', type=int, default=1)
@@ -71,6 +72,7 @@ class Options():
         self.parser.add_argument('--name', type=str, default='experiment_name', help='name of the experiment')
         self.parser.add_argument('--checkpoint_dir', type=str, default='./checkpoint/', help='models are saved here')
         self.parser.add_argument('--model_path', type=str, default='none', help='path for retraining')
+        self.parser.add_argument('--hf_cache_path', type=str, default=None, help='huggingface cache dir')
 
         # dataset parameters
         self.parser.add_argument("--per_gpu_batch_size", default=1, type=int, 

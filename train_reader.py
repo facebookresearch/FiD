@@ -4,6 +4,8 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+import os
+from datetime import datetime
 import time
 import sys
 import torch
@@ -11,6 +13,7 @@ import transformers
 import numpy as np
 from pathlib import Path
 from torch.utils.data import DataLoader, RandomSampler, DistributedSampler, SequentialSampler
+from tqdm import tqdm
 from src.options import Options
 
 import src.slurm
@@ -41,11 +44,16 @@ def train(model, optimizer, scheduler, step, train_dataset, eval_dataset, opt, c
     )
 
     loss, curr_loss = 0.0, 0.0
-    epoch = 1
+    num_steps_per_epoch = len(train_dataloader)
+    if isinstance(opt.total_epochs, int):
+        opt.total_steps = opt.total_epochs * num_steps_per_epoch
     model.train()
+    
+    epoch = 0
     while step < opt.total_steps:
         epoch += 1
-        for i, batch in enumerate(train_dataloader):
+        
+        for i, batch in tqdm(enumerate(train_dataloader), initial=0, total=len(train_dataloader), desc=f'Training {epoch}'):
             step += 1
             (idx, labels, _, context_ids, context_mask) = batch
 
@@ -66,7 +74,10 @@ def train(model, optimizer, scheduler, step, train_dataset, eval_dataset, opt, c
             train_loss = src.util.average_main(train_loss, opt)
             curr_loss += train_loss.item()
 
-            if step % opt.eval_freq == 0:
+            if (
+                isinstance(opt.eval_freq, int) and step % opt.eval_freq == 0
+                or isinstance(opt.eval_freq, float) and step/num_steps_per_epoch <= opt.eval_freq and (step+1)/num_steps_per_epoch > opt.eval_freq
+            ):
                 dev_em = evaluate(model, eval_dataset, tokenizer, collator, opt)
                 model.train()
                 if opt.is_main:
@@ -84,9 +95,14 @@ def train(model, optimizer, scheduler, step, train_dataset, eval_dataset, opt, c
                         tb_logger.add_scalar("Training", curr_loss / (opt.eval_freq), step)
                     curr_loss = 0.
 
-            if opt.is_main and step % opt.save_freq == 0:
-                src.util.save(model, optimizer, scheduler, step, best_dev_em,
-                          opt, checkpoint_path, f"step-{step}")
+            if (
+                opt.is_main 
+                and (
+                    isinstance(opt.save_freq, int) and step % opt.save_freq == 0
+                    or isinstance(opt.save_freq, float) and step/num_steps_per_epoch <= opt.save_freq and (step+1)/num_steps_per_epoch > opt.save_freq
+                )
+            ):
+                src.util.save(model, optimizer, scheduler, step, best_dev_em, opt, checkpoint_path, f"epoch{epoch}-step{step}")
             if step > opt.total_steps:
                 break
 
@@ -129,7 +145,26 @@ if __name__ == "__main__":
     options.add_optim_options()
     opt = options.parse()
     #opt = options.get_options(use_reader=True, use_optim=True)
-
+    opt.checkpoint_dir = f'/mnt/ocr-nfsx1/public/hodong.lee/cloned/FiD/checkpoint/cosmosqa'
+    opt.hf_cache_path = "/mnt/ocr-nfsx1/public_datasets/.cache"
+    opt.train_data = "/mnt/ocr-nfsx1/public/hodong.lee/datasets/cosmosQA/FiD_format__train.json"
+    opt.eval_data = "/mnt/ocr-nfsx1/public/hodong.lee/datasets/cosmosQA/FiD_format__validation.json"
+    opt.model_size = "large" # "base"
+    opt.name = f'cosmosqa_{opt.model_size}_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
+    opt.lr = 0.00005
+    opt.optim = "adamw"
+    opt.scheduler = "linear"
+    opt.weight_decay = 0.01
+    opt.text_maxlength = 250
+    opt.use_checkpoint = True
+    opt.per_gpu_batch_size = 32
+    # opt.total_steps = 15_000
+    opt.total_epochs = 30
+    opt.warmup_step = 50
+    opt.n_context = 100
+    opt.save_freq = 1.0
+    opt.eval_freq = 1.0
+    
     torch.manual_seed(opt.seed)
     src.slurm.init_distributed_mode(opt)
     src.slurm.init_signal_handler()
@@ -153,16 +188,18 @@ if __name__ == "__main__":
     model_class = src.model.FiDT5
 
     #load data
-    tokenizer = transformers.T5Tokenizer.from_pretrained(model_name)
+    tokenizer = transformers.T5Tokenizer.from_pretrained(model_name, cache_dir=opt.hf_cache_path)
     collator = src.data.Collator(opt.text_maxlength, tokenizer, answer_maxlength=opt.answer_maxlength)
 
     # use golbal rank and world size to split the eval set on multiple gpus
     train_examples = src.data.load_data(
-        opt.train_data, 
+        opt.train_data,
         global_rank=opt.global_rank, 
         world_size=opt.world_size,
     )
     train_dataset = src.data.Dataset(train_examples, opt.n_context)
+    print(f'# [info] train_examples size: {len(train_examples)}')
+    print(f'# [info] train_dataset size: {len(train_dataset)}')
     # use golbal rank and world size to split the eval set on multiple gpus
     eval_examples = src.data.load_data(
         opt.eval_data,
@@ -172,7 +209,7 @@ if __name__ == "__main__":
     eval_dataset = src.data.Dataset(eval_examples, opt.n_context)
 
     if not checkpoint_exists and opt.model_path == "none":
-        t5 = transformers.T5ForConditionalGeneration.from_pretrained(model_name)
+        t5 = transformers.T5ForConditionalGeneration.from_pretrained(model_name, cache_dir=opt.hf_cache_path)
         model = src.model.FiDT5(t5.config)
         model.load_t5(t5.state_dict())
         model = model.to(opt.local_rank)
@@ -191,6 +228,7 @@ if __name__ == "__main__":
     model.set_checkpoint(opt.use_checkpoint)
 
     if opt.is_distributed:
+        opt.local_rank = int(os.environ['LOCAL_RANK'])
         model = torch.nn.parallel.DistributedDataParallel(
             model,
             device_ids=[opt.local_rank],
@@ -199,6 +237,7 @@ if __name__ == "__main__":
         )
 
     logger.info("Start training")
+
     train(
         model,
         optimizer,
